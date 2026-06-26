@@ -21,6 +21,7 @@ def _split_csv(value: str) -> List[str]:
 class Config:
     broker: str = field(default_factory=lambda: os.getenv("BROKER", "mock").lower())
     trd_env: str = field(default_factory=lambda: os.getenv("TRD_ENV", "SIMULATE").upper())
+    data_source: str = field(default_factory=lambda: os.getenv("DATA_SOURCE", "demo").lower())
     watchlist: List[str] = field(
         default_factory=lambda: _split_csv(os.getenv("WATCHLIST", "AAPL,MSFT,NVDA,SPY"))
     )
@@ -41,6 +42,11 @@ class Config:
     def is_real_money(self) -> bool:
         """True only when configured to place LIVE orders with real money."""
         return self.broker == "moomoo" and self.trd_env == "REAL"
+
+    @property
+    def mode_label(self) -> str:
+        """Human-readable mode shown in the UI, e.g. 'MOCK / SIMULATE'."""
+        return f"{self.broker.upper()} / {self.trd_env}"
 
 
 def load_config() -> Config:

@@ -49,18 +49,29 @@ def cmd_demo(cfg) -> None:
     print("\nDone — the position automatically took profit. (All fake money.)")
 
 
+def cmd_web(cfg) -> None:
+    from web.app import create_app
+
+    app = create_app(cfg)
+    print(f"Dashboard: http://{cfg.web_host}:{cfg.web_port}   (mode: {cfg.mode_label}, data: {cfg.data_source})")
+    app.run(host=cfg.web_host, port=cfg.web_port, debug=False)
+
+
 def main() -> None:
     cfg = load_config()
     parser = argparse.ArgumentParser(prog="tsh", description="TradingSignalandHelper")
     sub = parser.add_subparsers(dest="cmd")
     sub.add_parser("signals", help="compute signals for the watchlist (uses yfinance)")
     sub.add_parser("demo", help="offline end-to-end demo in mock mode")
+    sub.add_parser("web", help="launch the local dashboard + one-button trader")
     args = parser.parse_args()
 
     if args.cmd == "signals":
         cmd_signals(cfg)
     elif args.cmd == "demo":
         cmd_demo(cfg)
+    elif args.cmd == "web":
+        cmd_web(cfg)
     else:
         parser.print_help()
 

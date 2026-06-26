@@ -39,7 +39,7 @@ order can be used once you trade live.)
 | `moomoo` | `SIMULATE`| Real moomoo **paper** trading via OpenD (fake money, real plumbing). Phase 5. |
 | `moomoo` | `REAL`    | **Live money.** Double-gated. Not recommended while learning. |
 
-## Quick start (mock mode)
+## Quick start (mock mode — no network, no credentials)
 
 ```bash
 python3 -m venv .venv
@@ -47,10 +47,17 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # defaults are fine for mock mode
 
-pytest                        # run the test suite
+pytest                        # run the test suite (29 tests)
+python cli.py demo            # offline end-to-end demo in the terminal
+python cli.py web             # launch the dashboard at http://127.0.0.1:5000
 ```
 
-(The signals CLI and the one-button web dashboard arrive in later phases — see below.)
+Open the dashboard, review the signals, and click **Buy / Sell** — a confirm
+"order ticket" appears; confirm and the position shows up with live P&L. Everything
+is fake money in `mock` mode.
+
+`python cli.py signals` prints live signals using real (delayed) yfinance data —
+set `DATA_SOURCE=yfinance` in `.env` to use real data in the dashboard too.
 
 ## Project structure
 
@@ -71,10 +78,10 @@ docs/superpowers/specs/   Approved design document
 ## Build phases
 
 1. ✅ Scaffold + config + spec doc
-2. EMA crossover strategy (TDD)
-3. Mock broker + executor with soft stop-loss (TDD)
-4. Web dashboard + one Trade button  *(designed with real trading-app references)*
-5. moomoo OpenD integration (paper)
-6. `/webhook` stub for future TradingView + polish
+2. ✅ EMA crossover strategy (TDD)
+3. ✅ Mock broker + executor with soft stop-loss (TDD)
+4. ✅ Web dashboard + one Trade button (dark, calm, confirm-ticket)
+5. ⏳ moomoo OpenD integration (paper) — *scaffolded; connect your account later*
+6. ⏳ `/webhook` for future TradingView + polish
 
 See [`docs/superpowers/specs`](docs/superpowers/specs) for the full design.

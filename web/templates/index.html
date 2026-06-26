@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en" data-real-money="{{ 'true' if real_money else 'false' }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TradingSignalandHelper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">TradingSignalandHelper</span>
+    </div>
+    <div class="topbar-right">
+      {% if real_money %}
+      <span class="mode-pill mode-live" title="LIVE money">● LIVE • {{ mode }}</span>
+      {% else %}
+      <span class="mode-pill mode-paper" title="Paper / fake money">● PAPER • {{ mode }} • fake money</span>
+      {% endif %}
+      <span class="refresh-dot" id="refreshDot" title="Live auto-refresh"></span>
+    </div>
+  </header>
+
+  <main id="main" class="layout">
+    <!-- Summary -->
+    <section class="stats" aria-label="Account summary">
+      <div class="stat-card">
+        <span class="stat-label">Unrealized P&amp;L</span>
+        <span class="stat-value" id="statPnl">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Open positions</span>
+        <span class="stat-value" id="statPositions">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Actionable signals</span>
+        <span class="stat-value" id="statSignals">—</span>
+      </div>
+    </section>
+
+    <div id="errorBanner" class="error-banner" hidden></div>
+
+    <div class="panels">
+      <!-- Signals -->
+      <section class="panel" aria-labelledby="signalsHeading">
+        <div class="panel-head">
+          <h2 id="signalsHeading">Signals</h2>
+          <span class="panel-sub">EMA{{ ema_fast }}/{{ ema_slow }} · TP +{{ tp_pct }}% · SL −{{ sl_pct }}%</span>
+        </div>
+        <ul class="signal-list" id="signalList" aria-live="polite">
+          <li class="skeleton-row"></li>
+          <li class="skeleton-row"></li>
+          <li class="skeleton-row"></li>
+        </ul>
+      </section>
+
+      <!-- Positions -->
+      <section class="panel" aria-labelledby="positionsHeading">
+        <div class="panel-head">
+          <h2 id="positionsHeading">Open positions</h2>
+          <span class="panel-sub">soft TP/SL watched live</span>
+        </div>
+        <ul class="position-list" id="positionList" aria-live="polite">
+          <li class="skeleton-row"></li>
+          <li class="skeleton-row"></li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- Activity -->
+    <section class="panel activity" aria-labelledby="activityHeading">
+      <div class="panel-head">
+        <h2 id="activityHeading">Activity</h2>
+      </div>
+      <ul class="activity-list" id="activityList">
+        <li class="activity-empty">No activity yet — place your first trade.</li>
+      </ul>
+    </section>
+  </main>
+
+  <!-- Confirm order modal -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h3 id="modalTitle" class="modal-title">Confirm order</h3>
+      <p class="modal-sub" id="modalSub">Review before you place it.</p>
+      <dl class="ticket" id="ticket"></dl>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="cancelBtn" type="button">Cancel</button>
+        <button class="btn" id="confirmBtn" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap" aria-live="assertive"></div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
