@@ -89,3 +89,43 @@ def test_index_page_renders():
     r = app.test_client().get("/")
     assert r.status_code == 200
     assert b"TradingSignalandHelper" in r.data
+
+
+# ───────── webhook (future TradingView) ─────────
+
+def test_webhook_rejects_bad_key():
+    app, broker = _app()
+    r = app.test_client().post("/webhook", json={"action": "buy", "symbol": "UP", "key": "wrong"})
+    assert r.status_code == 401
+    assert broker.open_positions() == []
+
+
+def test_webhook_buy_executes_with_valid_key():
+    app, broker = _app()
+    r = app.test_client().post("/webhook", json={
+        "action": "buy", "symbol": "UP", "price": 100.0, "tp": 103.0, "sl": 98.0,
+        "key": "change-me",
+    })
+    assert r.status_code == 200
+    assert r.get_json()["status"] == "OPENED"
+    assert len(broker.open_positions()) == 1
+    assert broker.open_positions()[0].symbol == "UP"
+
+
+def test_webhook_close_executes():
+    app, broker = _app()
+    client = app.test_client()
+    client.post("/webhook", json={"action": "buy", "symbol": "UP", "price": 100.0, "key": "change-me"})
+    r = client.post("/webhook", json={"action": "close", "symbol": "UP", "price": 101.0, "key": "change-me"})
+    assert r.get_json()["status"] == "CLOSED"
+    assert broker.open_positions() == []
+
+
+def test_webhook_blocked_in_real_money_mode():
+    feed = FakeFeed({"UP": [10, 10, 10, 10, 10, 10, 12]})
+    cfg = _cfg(["UP"])
+    cfg.broker = "moomoo"
+    cfg.trd_env = "REAL"  # -> is_real_money True
+    app = create_app(config=cfg, feed=feed, broker=MockBroker())
+    r = app.test_client().post("/webhook", json={"action": "buy", "symbol": "UP", "key": "change-me"})
+    assert r.status_code == 403

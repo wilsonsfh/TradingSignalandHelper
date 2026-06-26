@@ -22,7 +22,17 @@ from signals.engine import SignalEngine
 from broker.base import Broker
 from broker.mock_broker import MockBroker
 from trader.executor import Executor
-from models import Signal, Position
+from models import Action, Signal, Position
+
+
+def _action_from_alert(body: Dict[str, Any]) -> Optional[Action]:
+    action = str(body.get("action", "")).lower()
+    side = str(body.get("side", "")).lower()
+    if action == "close" or side in ("sell", "short") or action in ("sell", "short", "exit"):
+        return Action.SELL
+    if side in ("buy", "long") or action in ("buy", "long", "open"):
+        return Action.BUY
+    return None
 
 
 def _build_feed(cfg: Config):
@@ -33,6 +43,16 @@ def _build_feed(cfg: Config):
     from data.synthetic_feed import SyntheticFeed
 
     return SyntheticFeed()
+
+
+def build_broker(cfg: Config) -> Broker:
+    """Select a broker from config. moomoo broker is returned *unconnected*;
+    call .connect() before serving (see cli.py web)."""
+    if cfg.broker == "moomoo":
+        from broker.moomoo_broker import MoomooBroker
+
+        return MoomooBroker(host=cfg.opend_host, port=cfg.opend_port, trd_env=cfg.trd_env)
+    return MockBroker()
 
 
 def _signal_dict(s: Signal) -> Dict[str, Any]:
@@ -71,7 +91,7 @@ def create_app(
 ) -> Flask:
     cfg = config or load_config()
     feed = feed or _build_feed(cfg)
-    broker = broker or MockBroker()
+    broker = broker or build_broker(cfg)
     strategy = EMACrossover(cfg.ema_fast, cfg.ema_slow, cfg.take_profit_pct, cfg.stop_loss_pct)
     engine = SignalEngine(strategy, feed, cfg.candle_period, cfg.candle_interval)
     executor = Executor(broker, cfg.quantity)
@@ -178,6 +198,49 @@ def create_app(
         log("close", symbol, f"Closed @ {pos.close_price}")
         return jsonify({"status": "CLOSED", "message": f"Closed {symbol}",
                         "position": _position_dict(pos)})
+
+    @app.post("/webhook")
+    def webhook():
+        """Future TradingView entry point. Authenticated by a shared secret.
+
+        Body: {"action":"buy|sell|close", "symbol":"AAPL", "price":?, "tp":?, "sl":?,
+               "key":"<WEBHOOK_SECRET>"}
+        """
+        body = request.get_json(silent=True) or {}
+        if body.get("key") != cfg.webhook_secret:
+            return jsonify({"status": "UNAUTHORIZED", "message": "bad or missing key"}), 401
+        # Safety: do not allow unattended auto-trading with real money.
+        if cfg.is_real_money:
+            return jsonify({
+                "status": "DISABLED",
+                "message": "webhook auto-trading is disabled in REAL-money mode",
+            }), 403
+
+        symbol = str(body.get("symbol", "")).upper()
+        if not symbol:
+            return jsonify({"status": "ERROR", "message": "symbol is required"}), 400
+        action = _action_from_alert(body)
+        if action is None:
+            return jsonify({"status": "ERROR", "message": "could not determine buy/sell/close"}), 400
+
+        price = body.get("price")
+        if price is None:
+            try:
+                price = float(feed.last_price(symbol))
+            except Exception:
+                return jsonify({"status": "ERROR", "message": "no price available"}), 400
+
+        signal = Signal(
+            symbol, action, float(price),
+            take_profit=body.get("tp"), stop_loss=body.get("sl"),
+            reason="tradingview webhook",
+        )
+        result = executor.execute(signal)
+        log("hook", symbol, result["message"])
+        payload = {"status": result["status"], "message": result["message"]}
+        if result.get("position"):
+            payload["position"] = _position_dict(result["position"])
+        return jsonify(payload)
 
     return app
 

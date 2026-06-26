@@ -50,9 +50,16 @@ def cmd_demo(cfg) -> None:
 
 
 def cmd_web(cfg) -> None:
-    from web.app import create_app
+    from web.app import create_app, build_broker
 
-    app = create_app(cfg)
+    broker = build_broker(cfg)
+    if cfg.broker == "moomoo":
+        try:
+            broker.connect()
+            print("Connected to moomoo via OpenD.")
+        except Exception as exc:
+            print(f"WARNING: moomoo not connected — {exc}\nServing dashboard anyway; trades will error until connected.")
+    app = create_app(cfg, broker=broker)
     print(f"Dashboard: http://{cfg.web_host}:{cfg.web_port}   (mode: {cfg.mode_label}, data: {cfg.data_source})")
     app.run(host=cfg.web_host, port=cfg.web_port, debug=False)
 
