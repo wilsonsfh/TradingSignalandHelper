@@ -1,9 +1,9 @@
-# Core dependencies (Phases 1-4)
+# Core credential-free dependencies
 pandas>=2.0,<3
 yfinance>=0.2.40
 Flask>=3.0,<4
 python-dotenv>=1.0
 pytest>=8.0
 
-# Phase 5 (moomoo paper/live trading via OpenD) — install when ready:
-#   pip install moomoo-api
+# Optional Moomoo paper-trading SDK; install only for the OpenD smoke test:
+#   pip install -r requirements-moomoo.txt

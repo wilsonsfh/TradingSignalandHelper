@@ -1,8 +1,8 @@
 """Broker interface: execute orders and track positions.
 
 Implementations:
-  - MockBroker   (Phase 3) — simulated fills + soft stop-loss/take-profit.
-  - MoomooBroker (Phase 5) — real moomoo via OpenD (paper first).
+  - MockBroker: simulated fills + soft stop-loss/take-profit.
+  - MoomooBroker: Moomoo via OpenD, paper first.
 """
 from __future__ import annotations
 
@@ -10,6 +10,10 @@ from abc import ABC, abstractmethod
 from typing import List
 
 from models import BracketOrder, Position
+
+
+class BrokerOrderRejected(RuntimeError):
+    """Broker definitively rejected an order before any exposure was created."""
 
 
 class Broker(ABC):

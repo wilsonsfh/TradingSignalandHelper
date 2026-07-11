@@ -1,4 +1,4 @@
-from models import Action, Signal
+from models import Action, Position, Signal
 from broker.mock_broker import MockBroker
 from trader.executor import Executor
 
@@ -42,3 +42,38 @@ def test_hold_signal_is_noop():
     res = ex.execute(_sig("AAPL", Action.HOLD, 100.0))
     assert res["status"] == "NOOP"
     assert b.positions() == []
+
+
+def test_buy_reports_pending_until_broker_confirms_entry_fill():
+    class PendingEntryBroker(MockBroker):
+        def place_bracket(self, order):
+            position = Position(
+                order.symbol,
+                order.quantity,
+                0.0,
+                order.take_profit,
+                order.stop_loss,
+                status="ENTRY_PENDING",
+            )
+            self._positions.append(position)
+            return position
+
+    broker = PendingEntryBroker()
+    result = Executor(broker).execute(
+        _sig("AAPL", Action.BUY, 100.0, tp=103.0, sl=98.0)
+    )
+
+    assert result["status"] == "ENTRY_PENDING"
+
+
+def test_sell_reports_pending_until_broker_confirms_exit_fill():
+    class PendingExitBroker(MockBroker):
+        def close(self, symbol, price, reason="MANUAL"):
+            position = self.open_positions()[0]
+            position.status = "EXIT_PENDING"
+            return position
+
+    broker = PendingExitBroker([Position("AAPL", 1, 100.0)])
+    result = Executor(broker).execute(_sig("AAPL", Action.SELL, 101.0))
+
+    assert result["status"] == "EXIT_PENDING"

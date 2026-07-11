@@ -5,6 +5,7 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
+.superpowers/
 
 # Env / secrets  (NEVER commit real credentials)
 .env
@@ -12,7 +13,9 @@ venv/
 
 # Data / state
 state/*.db
+state/*.db-*
 state/*.sqlite
+state/*.sqlite-*
 *.log
 
 # moomoo OpenD device file (Phase 5)

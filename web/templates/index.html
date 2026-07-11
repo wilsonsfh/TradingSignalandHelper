@@ -1,102 +1,145 @@
-<!DOCTYPE html>
-<html lang="en" data-real-money="{{ 'true' if real_money else 'false' }}">
+<!doctype html>
+<html lang="en"
+      data-real-money="{{ 'true' if real_money else 'false' }}"
+      data-quantity="{{ quantity }}">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TradingSignalandHelper</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Signal Desk · Trading helper</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='%2358d7c0' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
+  <a class="skip-link" href="#main">Skip to trading workspace</a>
 
   <header class="topbar">
-    <div class="brand">
+    <a class="brand" href="#main" aria-label="Signal Desk home">
       <span class="brand-mark" aria-hidden="true"></span>
-      <span class="brand-name">TradingSignalandHelper</span>
-    </div>
-    <div class="topbar-right">
+      <span class="brand-copy">
+        <strong>Signal Desk</strong>
+        <small>TradingSignalandHelper</small>
+      </span>
+    </a>
+    <div class="environment" aria-label="Trading environment">
       {% if real_money %}
-      <span class="mode-pill mode-live" title="LIVE money">● LIVE • {{ mode }}</span>
+      <span class="mode-pill mode-live"><span aria-hidden="true">●</span> Live · {{ mode }}</span>
       {% else %}
-      <span class="mode-pill mode-paper" title="Paper / fake money">● PAPER • {{ mode }} • fake money</span>
+      <span class="mode-pill mode-paper"><span aria-hidden="true">●</span> Paper · {{ mode }}</span>
       {% endif %}
-      <span class="refresh-dot" id="refreshDot" title="Live auto-refresh"></span>
+      <span class="refresh-status" id="lastUpdated" aria-live="polite">Connecting…</span>
     </div>
   </header>
 
   <main id="main" class="layout">
-    <!-- Summary -->
-    <section class="stats" aria-label="Account summary">
-      <div class="stat-card">
-        <span class="stat-label">Unrealized P&amp;L</span>
-        <span class="stat-value" id="statPnl">—</span>
+    <header class="workspace-intro">
+      <div>
+        <p class="context-label">{{ 'Live trading workspace' if real_money else 'Paper trading workspace' }}</p>
+        <h1>Review signals. Protect positions.</h1>
       </div>
-      <div class="stat-card">
-        <span class="stat-label">Open positions</span>
-        <span class="stat-value" id="statPositions">—</span>
+      <div class="workspace-support">
+        <p class="workspace-copy">{% if real_money %}Real orders require explicit confirmation. Broker confirmation always wins over optimistic UI.{% else %}Human-confirmed execution with a background TP/SL monitor. Broker confirmation always wins over optimistic UI.{% endif %}</p>
+        {% if not real_money %}<button class="text-button" id="guideToggle" type="button" aria-controls="quickStart" aria-expanded="true">How to use</button>{% endif %}
       </div>
-      <div class="stat-card">
-        <span class="stat-label">Actionable signals</span>
-        <span class="stat-value" id="statSignals">—</span>
+    </header>
+
+    <section class="summary-rail" aria-label="Portfolio summary">
+      <div class="summary-metric summary-pnl">
+        <span>Unrealized P&amp;L</span>
+        <strong id="statPnl">—</strong>
+      </div>
+      <div class="summary-metric">
+        <span>Active positions</span>
+        <strong id="statPositions">—</strong>
+      </div>
+      <div class="summary-metric summary-attention">
+        <span>Needs attention</span>
+        <strong id="statAttention">—</strong>
       </div>
     </section>
 
-    <div id="errorBanner" class="error-banner" hidden></div>
-
-    <div class="panels">
-      <!-- Signals -->
-      <section class="panel" aria-labelledby="signalsHeading">
-        <div class="panel-head">
-          <h2 id="signalsHeading">Signals</h2>
-          <span class="panel-sub">EMA{{ ema_fast }}/{{ ema_slow }} · TP +{{ tp_pct }}% · SL −{{ sl_pct }}%</span>
+    {% if not real_money %}
+    <section class="quick-start" id="quickStart" aria-labelledby="quickStartTitle" tabindex="-1">
+      <div class="quick-start-head">
+        <div>
+          <p class="section-label">First paper trade · about one minute</p>
+          <h2 id="quickStartTitle" tabindex="-1">Learn by placing one fake-money order</h2>
         </div>
-        <ul class="signal-list" id="signalList" aria-live="polite">
+        <button class="btn btn-sm btn-ghost" id="guideDismiss" type="button">Dismiss</button>
+      </div>
+      <ol class="quick-start-steps">
+        <li><span class="step-number" aria-hidden="true">1</span><span><strong>Choose a BUY signal</strong><small>Use Review on an actionable row.</small></span></li>
+        <li><span class="step-number" aria-hidden="true">2</span><span><strong>Confirm the ticket</strong><small>Check quantity, market order, TP, and SL.</small></span></li>
+        <li><span class="step-number" aria-hidden="true">3</span><span><strong>Watch protection</strong><small>Keep the app running until the monitor confirms closure.</small></span></li>
+      </ol>
+    </section>
+    {% endif %}
+
+    <div id="errorBanner" class="error-banner" role="alert" hidden></div>
+
+    <div class="workspace-grid">
+      <section class="panel signals-panel" aria-labelledby="signalsHeading" aria-describedby="signalsDescription">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Decision queue</p>
+            <h2 id="signalsHeading">Watchlist signals</h2>
+            <p id="signalsDescription">EMA{{ ema_fast }}/{{ ema_slow }} · TP +{{ tp_pct }}% · SL −{{ sl_pct }}%</p>
+          </div>
+          <span class="count-badge" id="signalCount"><strong id="statSignals">—</strong> actionable</span>
+        </div>
+        <ul class="signal-list" id="signalList" aria-live="polite" aria-busy="true">
           <li class="skeleton-row"></li>
           <li class="skeleton-row"></li>
           <li class="skeleton-row"></li>
         </ul>
       </section>
 
-      <!-- Positions -->
-      <section class="panel" aria-labelledby="positionsHeading">
+      <section class="panel positions-panel" aria-labelledby="positionsHeading" aria-describedby="positionsDescription">
         <div class="panel-head">
-          <h2 id="positionsHeading">Open positions</h2>
-          <span class="panel-sub">soft TP/SL watched live</span>
+          <div>
+            <p class="section-label">Protection state</p>
+            <h2 id="positionsHeading">Active positions</h2>
+            <p id="positionsDescription">Monitoring continues until the broker confirms a fill.</p>
+          </div>
         </div>
-        <ul class="position-list" id="positionList" aria-live="polite">
+        <ul class="position-list" id="positionList" aria-live="polite" aria-busy="true">
           <li class="skeleton-row"></li>
           <li class="skeleton-row"></li>
         </ul>
       </section>
     </div>
 
-    <!-- Activity -->
-    <section class="panel activity" aria-labelledby="activityHeading">
-      <div class="panel-head">
-        <h2 id="activityHeading">Activity</h2>
+    <section class="panel activity-panel" aria-labelledby="activityHeading">
+      <div class="panel-head activity-head">
+        <div>
+          <p class="section-label">Audit trail</p>
+          <h2 id="activityHeading">Recent activity</h2>
+        </div>
+        <span class="activity-note">Latest 20 events</span>
       </div>
       <ul class="activity-list" id="activityList">
-        <li class="activity-empty">No activity yet — place your first trade.</li>
+        <li class="empty-state compact">No activity yet. Review an actionable signal to begin.</li>
       </ul>
     </section>
   </main>
 
-  <!-- Confirm order modal -->
-  <div class="modal-overlay" id="modalOverlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <h3 id="modalTitle" class="modal-title">Confirm order</h3>
-      <p class="modal-sub" id="modalSub">Review before you place it.</p>
-      <dl class="ticket" id="ticket"></dl>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" id="cancelBtn" type="button">Cancel</button>
-        <button class="btn" id="confirmBtn" type="button">Confirm</button>
+  <dialog class="order-dialog" id="orderDialog" aria-labelledby="modalTitle" aria-describedby="modalSub">
+    <div class="dialog-head">
+      <div>
+        <p class="section-label">Order ticket</p>
+        <h2 id="modalTitle">Confirm order</h2>
       </div>
+      <button class="icon-button" id="dialogCloseBtn" type="button" aria-label="Close order ticket">×</button>
     </div>
-  </div>
+    <p class="dialog-copy" id="modalSub">Review every field before placing the order.</p>
+    <dl class="ticket" id="ticket"></dl>
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" id="cancelBtn" type="button">Cancel</button>
+      <button class="btn" id="confirmBtn" type="button">Confirm</button>
+    </div>
+  </dialog>
 
-  <div class="toast-wrap" id="toastWrap" aria-live="assertive"></div>
-
+  <div class="toast-wrap" id="toastWrap" aria-live="assertive" aria-atomic="true"></div>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

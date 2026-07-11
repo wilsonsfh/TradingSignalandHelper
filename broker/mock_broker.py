@@ -7,20 +7,22 @@ No network, fully deterministic.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, Iterable, List, Optional
 
 from models import Action, BracketOrder, Position
 from broker.base import Broker
 
 
 class MockBroker(Broker):
-    def __init__(self) -> None:
+    def __init__(self, initial_positions: Optional[Iterable[Position]] = None) -> None:
         self._last_price: Dict[str, float] = {}
-        self._positions: List[Position] = []
+        self._positions: List[Position] = list(initial_positions or [])
 
     def place_bracket(self, order: BracketOrder) -> Position:
         if order.side is not Action.BUY:
             raise ValueError("MockBroker.place_bracket only opens long positions (BUY)")
+        if any(p.status != "CLOSED" and p.symbol == order.symbol for p in self._positions):
+            raise ValueError(f"an open position already exists for {order.symbol!r}")
         price = self._last_price.get(order.symbol)
         if price is None:
             raise ValueError(
@@ -41,13 +43,13 @@ class MockBroker(Broker):
         return list(self._positions)
 
     def open_positions(self) -> List[Position]:
-        return [p for p in self._positions if p.status == "OPEN"]
+        return [p for p in self._positions if p.status != "CLOSED"]
 
     def update_price(self, symbol: str, price: float) -> List[Position]:
         self._last_price[symbol] = price
         closed: List[Position] = []
         for p in self._positions:
-            if p.status != "OPEN" or p.symbol != symbol:
+            if p.status == "CLOSED" or p.symbol != symbol:
                 continue
             if p.take_profit is not None and price >= p.take_profit:
                 self._close(p, price, "TAKE_PROFIT")
@@ -59,7 +61,7 @@ class MockBroker(Broker):
 
     def close(self, symbol: str, price: float, reason: str = "MANUAL") -> Position:
         for p in self._positions:
-            if p.status == "OPEN" and p.symbol == symbol:
+            if p.status != "CLOSED" and p.symbol == symbol:
                 self._close(p, price, reason)
                 return p
         raise ValueError(f"no open position for {symbol!r}")

@@ -1,7 +1,7 @@
 # TradingSignalandHelper — Design
 
 **Date:** 2026-06-24
-**Status:** Approved
+**Status:** Implemented; extended by [the credential-free completion design](2026-07-11-credential-free-completion-design.md)
 **Owner:** wilsonsfh
 
 ## Goal
@@ -43,12 +43,13 @@ price data → EMA strategy → Signal → dashboard → [Trade button] → exec
 | `data/price_feed.py` | `PriceFeed` interface + `YFinanceFeed` (daily candles) | yfinance |
 | `strategy/base.py` | `Strategy` interface (pure: candles → Signal) | models |
 | `strategy/ema_crossover.py` | EMA crossover strategy | pandas, models |
-| `signals/engine.py` | Run a strategy across the watchlist; persist latest signals | strategy, data, state |
+| `signals/engine.py` | Run a strategy across the watchlist | strategy, data |
 | `broker/base.py` | `Broker` interface | models |
 | `broker/mock_broker.py` | Simulated fills + soft TP/SL watch | models |
-| `broker/moomoo_broker.py` | Real moomoo via OpenD (paper first) — Phase 5 | moomoo-api |
+| `broker/moomoo_broker.py` | Moomoo via OpenD (paper first; injected SDK contract) | moomoo-api |
 | `trader/executor.py` | Turn a Signal into broker calls (the "Trade" action) | broker, models |
-| `web/app.py` | Flask dashboard + one Trade button + `/webhook` stub | flask |
+| `trader/runtime.py` | Serialize mutations, persist outcomes, run soft-stop monitoring | broker, data, state |
+| `web/app.py` | Flask dashboard, trade APIs, and opt-in hardened `/webhook` | flask |
 | `state/store.py` | SQLite log of signals/orders/positions | stdlib sqlite3 |
 | `cli.py` | `signals` (print latest) and `trade` (execute latest) commands | all |
 
@@ -65,8 +66,8 @@ price data → EMA strategy → Signal → dashboard → [Trade button] → exec
    take-profit (+`TAKE_PROFIT_PCT`%), stop-loss (−`STOP_LOSS_PCT`%).
 3. `signals.engine` stores the latest signals.
 4. Dashboard / `cli signals` displays them.
-5. User clicks **Trade** → `trader.executor` → `broker.place_bracket(...)`; broker arms a
-   soft stop (watches price; closes on TP/SL hit).
+5. User clicks **Trade** → `trader.runtime` → `trader.executor` → broker; the runtime's
+   independent monitor watches prices and closes on TP/SL.
 6. All events logged to `state`.
 
 ## Strategy (starting)
@@ -96,20 +97,19 @@ price data → EMA strategy → Signal → dashboard → [Trade button] → exec
 
 ## Testing
 
-TDD throughout. Pure units (strategy, mock broker soft-stop, executor) are unit-tested
-with deterministic in-memory data — no network in tests.
+TDD throughout. Strategy, stores, runtime, brokers, data adapters, Flask routes, and
+restart behavior are tested deterministically without network access.
 
 ## Build phases
 
-1. Scaffold + config + spec (this doc).
-2. EMA crossover strategy (TDD).
-3. Mock broker + executor with soft stop-loss (TDD).
-4. Web dashboard + one Trade button — designed using real trading-app (Mobbin) references,
-   built via the frontend-design skill.
-5. moomoo OpenD integration (paper/SIMULATE) + setup guide.
-6. `/webhook` stub for future TradingView; polish (README, safety gating, logging).
+1. Completed: scaffold + strict config + specs.
+2. Completed: EMA crossover strategy.
+3. Completed: mock broker + executor + durable SQLite state.
+4. Completed: dashboard + serialized runtime + independent soft-stop monitor.
+5. Credential-free complete: Moomoo SDK contract, cancellation, failure handling, and setup guide. External `SIMULATE` smoke test remains.
+6. Completed locally: opt-in, replay-resistant webhook. Public TradingView/cloud setup remains optional.
 
 ## Future (not now)
 
-- TradingView Pine strategy → webhook → `/webhook` endpoint (paid plan).
+- TradingView paid-plan alert configuration for the existing `/webhook` endpoint.
 - Cloudflare WAF + HTTPS; AWS scheduled EC2 / Lightsail deploy for 24/5 operation.

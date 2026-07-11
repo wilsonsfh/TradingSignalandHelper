@@ -1,6 +1,6 @@
 import pytest
 
-from models import Action, BracketOrder
+from models import Action, BracketOrder, Position
 from broker.mock_broker import MockBroker
 
 
@@ -72,4 +72,13 @@ def test_place_bracket_without_known_price_raises():
     order = BracketOrder(symbol="AAPL", side=Action.BUY, quantity=1,
                          take_profit=103.0, stop_loss=98.0)
     with pytest.raises(ValueError):
+        b.place_bracket(order)
+
+
+def test_non_closed_restored_position_blocks_duplicate_open():
+    b = MockBroker([Position("AAPL", 1, 100.0, status="OPEN_UNPROTECTED")])
+    b.update_price("AAPL", 101.0)
+    order = BracketOrder("AAPL", Action.BUY, 1)
+
+    with pytest.raises(ValueError, match="already exists"):
         b.place_bracket(order)

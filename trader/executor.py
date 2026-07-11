@@ -4,7 +4,7 @@
 - SELL -> close an existing open long for that symbol (if any).
 - HOLD -> do nothing.
 
-It is broker-agnostic: give it a MockBroker (dev/tests) or a MoomooBroker (Phase 5).
+It is broker-agnostic: give it a MockBroker or a MoomooBroker.
 """
 from __future__ import annotations
 
@@ -32,9 +32,14 @@ class Executor:
                 stop_loss=signal.stop_loss,
             )
             pos = self.broker.place_bracket(order)
+            status = "OPENED" if pos.status in {"OPEN", "OPEN_UNPROTECTED"} else pos.status
             return {
-                "status": "OPENED",
-                "message": f"Opened {self.quantity} {signal.symbol} @ {pos.avg_price}",
+                "status": status,
+                "message": (
+                    f"Opened {self.quantity} {signal.symbol} @ {pos.avg_price}"
+                    if status == "OPENED"
+                    else f"Entry submitted for {signal.symbol}"
+                ),
                 "position": pos,
             }
 
@@ -49,9 +54,14 @@ class Executor:
                     "position": None,
                 }
             pos = self.broker.close(signal.symbol, signal.price, reason="SIGNAL_EXIT")
+            status = "CLOSED" if pos.status == "CLOSED" else pos.status
             return {
-                "status": "CLOSED",
-                "message": f"Closed {signal.symbol} @ {signal.price}",
+                "status": status,
+                "message": (
+                    f"Closed {signal.symbol} @ {pos.close_price}"
+                    if status == "CLOSED"
+                    else f"Exit submitted for {signal.symbol}"
+                ),
                 "position": pos,
             }
 

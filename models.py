@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
+from uuid import uuid4
 
 
 class Action(str, Enum):
@@ -58,3 +59,9 @@ class Position:
     close_reason: str = ""               # TAKE_PROFIT | STOP_LOSS | MANUAL
     opened_at: datetime = field(default_factory=_utcnow)
     closed_at: Optional[datetime] = None
+    position_id: str = field(default_factory=lambda: uuid4().hex)
+    entry_order_id: Optional[str] = None
+    take_profit_order_id: Optional[str] = None
+    take_profit_order_quantity: Optional[float] = None
+    exit_order_id: Optional[str] = None
+    exit_order_quantity: Optional[float] = None

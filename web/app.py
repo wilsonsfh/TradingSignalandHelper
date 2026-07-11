@@ -11,8 +11,9 @@ Real-money mode (BROKER=moomoo + TRD_ENV=REAL) requires "confirm": true in the b
 """
 from __future__ import annotations
 
+import hmac
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, Optional
 
 from flask import Flask, jsonify, render_template, request
 
@@ -22,6 +23,8 @@ from signals.engine import SignalEngine
 from broker.base import Broker
 from broker.mock_broker import MockBroker
 from trader.executor import Executor
+from trader.runtime import TradingRuntime
+from state.store import StateStore
 from models import Action, Signal, Position
 
 
@@ -35,7 +38,11 @@ def _action_from_alert(body: Dict[str, Any]) -> Optional[Action]:
     return None
 
 
-def _build_feed(cfg: Config):
+def _build_feed(cfg: Config, broker: Broker):
+    if cfg.broker == "moomoo":
+        from data.price_feed import MoomooPriceFeed, YFinanceFeed
+
+        return MoomooPriceFeed(YFinanceFeed(), broker)
     if cfg.data_source == "yfinance":
         from data.price_feed import YFinanceFeed
 
@@ -45,14 +52,22 @@ def _build_feed(cfg: Config):
     return SyntheticFeed()
 
 
-def build_broker(cfg: Config) -> Broker:
+def build_broker(
+    cfg: Config,
+    initial_positions: Optional[Iterable[Position]] = None,
+) -> Broker:
     """Select a broker from config. moomoo broker is returned *unconnected*;
     call .connect() before serving (see cli.py web)."""
     if cfg.broker == "moomoo":
         from broker.moomoo_broker import MoomooBroker
 
-        return MoomooBroker(host=cfg.opend_host, port=cfg.opend_port, trd_env=cfg.trd_env)
-    return MockBroker()
+        return MoomooBroker(
+            host=cfg.opend_host,
+            port=cfg.opend_port,
+            trd_env=cfg.trd_env,
+            initial_positions=initial_positions,
+        )
+    return MockBroker(initial_positions)
 
 
 def _signal_dict(s: Signal) -> Dict[str, Any]:
@@ -88,28 +103,41 @@ def create_app(
     config: Optional[Config] = None,
     broker: Optional[Broker] = None,
     feed=None,
+    runtime: Optional[TradingRuntime] = None,
+    store: Optional[StateStore] = None,
 ) -> Flask:
     cfg = config or load_config()
-    feed = feed or _build_feed(cfg)
-    broker = broker or build_broker(cfg)
+    cfg.validate()
+    injected_dependencies = broker is not None or feed is not None
+    store = store or StateStore(":memory:" if injected_dependencies else cfg.state_db_path)
+    broker = broker or build_broker(
+        cfg,
+        initial_positions=store.load_positions(open_only=True),
+    )
+    feed = feed or _build_feed(cfg, broker)
     strategy = EMACrossover(cfg.ema_fast, cfg.ema_slow, cfg.take_profit_pct, cfg.stop_loss_pct)
     engine = SignalEngine(strategy, feed, cfg.candle_period, cfg.candle_interval)
     executor = Executor(broker, cfg.quantity)
-    activity: List[Dict[str, Any]] = []
+    runtime = runtime or TradingRuntime(
+        broker,
+        feed,
+        executor,
+        store,
+        poll_seconds=cfg.soft_stop_poll_seconds,
+    )
 
     app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+    app.extensions["trading_runtime"] = runtime
 
-    def log(kind: str, symbol: str, message: str) -> None:
-        activity.insert(0, {
-            "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-            "type": kind,
-            "symbol": symbol,
-            "message": message,
-        })
-        del activity[50:]
+    def _json_body():
+        body = request.get_json(silent=True)
+        if body is None:
+            return None if request.is_json else {}
+        return body if isinstance(body, dict) else None
 
-    def _confirm_required_response():
-        if cfg.is_real_money and not (request.get_json(silent=True) or {}).get("confirm"):
+    def _confirm_required_response(body):
+        if cfg.is_real_money and body.get("confirm") is not True:
             return jsonify({
                 "status": "CONFIRM_REQUIRED",
                 "message": "Real-money order needs explicit confirmation.",
@@ -132,7 +160,13 @@ def create_app(
 
     @app.get("/api/signals")
     def api_signals():
-        signals = [_signal_dict(s) for s in engine.run(cfg.watchlist)]
+        try:
+            generated = engine.run(cfg.watchlist)
+            for signal in generated:
+                store.save_signal(signal)
+        except Exception as exc:
+            return jsonify({"status": "ERROR", "message": str(exc)}), 503
+        signals = [_signal_dict(signal) for signal in generated]
         return jsonify({
             "signals": signals,
             "mode": cfg.mode_label,
@@ -141,37 +175,52 @@ def create_app(
 
     @app.get("/api/state")
     def api_state():
-        positions = []
-        for p in broker.open_positions():
-            try:
-                current = float(feed.last_price(p.symbol))
-            except Exception:
-                current = None
-            if current is not None:
-                closed = broker.update_price(p.symbol, current)
-                for c in closed:
-                    log("auto", c.symbol, f"{c.close_reason} @ {c.close_price}")
-            if p.status == "OPEN":
-                positions.append(_position_dict(p, current))
+        try:
+            positions = []
+            for p in broker.open_positions():
+                try:
+                    current = float(feed.last_price(p.symbol))
+                except Exception:
+                    current = None
+                if p.status != "CLOSED":
+                    positions.append(_position_dict(p, current))
+            activity = store.recent_activity()
+            for item in activity:
+                item["time"] = datetime.fromisoformat(str(item["time"])).strftime("%H:%M:%S")
+        except Exception as exc:
+            return jsonify({"status": "ERROR", "message": str(exc)}), 503
         return jsonify({
             "positions": positions,
-            "activity": activity[:20],
+            "activity": activity,
             "mode": cfg.mode_label,
             "real_money": cfg.is_real_money,
         })
 
     @app.post("/api/trade")
     def api_trade():
-        gate = _confirm_required_response()
+        body = _json_body()
+        if body is None:
+            return jsonify({"status": "ERROR", "message": "JSON body must be an object"}), 400
+        gate = _confirm_required_response(body)
         if gate:
             return gate
-        body = request.get_json(silent=True) or {}
-        symbol = (body.get("symbol") or "").upper()
+        symbol_value = body.get("symbol")
+        if symbol_value is not None and not isinstance(symbol_value, str):
+            return jsonify({"status": "ERROR", "message": "symbol must be a string"}), 400
+        symbol = (symbol_value or "").upper()
         if not symbol:
             return jsonify({"status": "ERROR", "message": "symbol is required"}), 400
-        signal = engine.run([symbol])[0]
-        result = executor.execute(signal)
-        log("trade", symbol, result["message"])
+        if symbol not in cfg.watchlist:
+            return jsonify({"status": "FORBIDDEN", "message": "symbol is outside the watchlist"}), 403
+        try:
+            signal = engine.run([symbol])[0]
+            result = runtime.execute(
+                signal,
+                source="dashboard",
+                request_id=body.get("request_id"),
+            )
+        except Exception as exc:
+            return jsonify({"status": "ERROR", "message": str(exc)}), 503
         payload = {"status": result["status"], "message": result["message"],
                    "signal": _signal_dict(signal)}
         if result.get("position"):
@@ -180,75 +229,137 @@ def create_app(
 
     @app.post("/api/close")
     def api_close():
-        gate = _confirm_required_response()
+        body = _json_body()
+        if body is None:
+            return jsonify({"status": "ERROR", "message": "JSON body must be an object"}), 400
+        gate = _confirm_required_response(body)
         if gate:
             return gate
-        body = request.get_json(silent=True) or {}
-        symbol = (body.get("symbol") or "").upper()
+        symbol_value = body.get("symbol")
+        if symbol_value is not None and not isinstance(symbol_value, str):
+            return jsonify({"status": "ERROR", "message": "symbol must be a string"}), 400
+        symbol = (symbol_value or "").upper()
         if not symbol:
             return jsonify({"status": "ERROR", "message": "symbol is required"}), 400
+        if symbol not in cfg.watchlist:
+            return jsonify({"status": "FORBIDDEN", "message": "symbol is outside the watchlist"}), 403
         try:
             current = float(feed.last_price(symbol))
-        except Exception:
-            current = None
+        except Exception as exc:
+            return jsonify({"status": "ERROR", "message": f"no price available: {exc}"}), 503
         try:
-            pos = broker.close(symbol, current if current is not None else 0.0, reason="MANUAL")
-        except ValueError as exc:
-            return jsonify({"status": "NOOP", "message": str(exc)}), 200
-        log("close", symbol, f"Closed @ {pos.close_price}")
-        return jsonify({"status": "CLOSED", "message": f"Closed {symbol}",
-                        "position": _position_dict(pos)})
+            result = runtime.close(
+                symbol,
+                current,
+                source="dashboard",
+                request_id=body.get("request_id"),
+            )
+        except Exception as exc:
+            return jsonify({"status": "ERROR", "message": str(exc)}), 503
+        payload = {"status": result["status"], "message": result["message"]}
+        if result.get("position"):
+            payload["position"] = _position_dict(result["position"])
+        return jsonify(payload)
 
     @app.post("/webhook")
     def webhook():
-        """Future TradingView entry point. Authenticated by a shared secret.
-
-        Body: {"action":"buy|sell|close", "symbol":"AAPL", "price":?, "tp":?, "sl":?,
-               "key":"<WEBHOOK_SECRET>"}
-        """
-        body = request.get_json(silent=True) or {}
-        if body.get("key") != cfg.webhook_secret:
+        """Optional, replay-resistant TradingView paper-trading entry point."""
+        if not cfg.webhook_enabled:
+            return jsonify({"status": "DISABLED", "message": "webhook is disabled"}), 404
+        if len(cfg.webhook_secret.strip()) < 32 or cfg.webhook_secret == "change-me":
+            return jsonify({
+                "status": "MISCONFIGURED",
+                "message": "configure a non-default WEBHOOK_SECRET",
+            }), 503
+        body = _json_body()
+        if body is None:
+            return jsonify({"status": "ERROR", "message": "JSON body must be an object"}), 400
+        supplied_key = str(body.get("key", ""))
+        if not hmac.compare_digest(supplied_key, cfg.webhook_secret):
             return jsonify({"status": "UNAUTHORIZED", "message": "bad or missing key"}), 401
-        # Safety: do not allow unattended auto-trading with real money.
         if cfg.is_real_money:
             return jsonify({
                 "status": "DISABLED",
                 "message": "webhook auto-trading is disabled in REAL-money mode",
             }), 403
 
-        symbol = str(body.get("symbol", "")).upper()
+        event_id = str(body.get("event_id", "")).strip()
+        timestamp = str(body.get("timestamp", "")).strip()
+        if not event_id or not timestamp:
+            return jsonify({"status": "ERROR", "message": "event_id and timestamp are required"}), 400
+        try:
+            occurred_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            if occurred_at.tzinfo is None:
+                raise ValueError("timestamp needs a timezone")
+        except ValueError:
+            return jsonify({"status": "ERROR", "message": "timestamp must be timezone-aware ISO-8601"}), 400
+        age = abs((datetime.now(timezone.utc) - occurred_at.astimezone(timezone.utc)).total_seconds())
+        if age > cfg.webhook_max_age_seconds:
+            return jsonify({"status": "EXPIRED", "message": "webhook event is too old or too far in the future"}), 400
+
+        symbol_value = body.get("symbol")
+        if symbol_value is not None and not isinstance(symbol_value, str):
+            return jsonify({"status": "ERROR", "message": "symbol must be a string"}), 400
+        symbol = (symbol_value or "").upper()
         if not symbol:
             return jsonify({"status": "ERROR", "message": "symbol is required"}), 400
+        if symbol not in cfg.watchlist:
+            return jsonify({"status": "FORBIDDEN", "message": "symbol is outside the watchlist"}), 403
         action = _action_from_alert(body)
         if action is None:
             return jsonify({"status": "ERROR", "message": "could not determine buy/sell/close"}), 400
 
-        price = body.get("price")
-        if price is None:
-            try:
-                price = float(feed.last_price(symbol))
-            except Exception:
-                return jsonify({"status": "ERROR", "message": "no price available"}), 400
+        try:
+            price = float(feed.last_price(symbol))
+        except Exception as exc:
+            return jsonify({"status": "ERROR", "message": f"no price available: {exc}"}), 503
+        try:
+            claimed = store.claim_webhook_event(event_id, occurred_at.isoformat())
+        except Exception as exc:
+            return jsonify({"status": "ERROR", "message": str(exc)}), 503
+        if not claimed:
+            return jsonify({"status": "REPLAY", "message": "event_id was already processed"}), 409
+
+        take_profit = None
+        stop_loss = None
+        if action is Action.BUY:
+            take_profit = round(price * (1 + cfg.take_profit_pct / 100), 2)
+            stop_loss = round(price * (1 - cfg.stop_loss_pct / 100), 2)
 
         signal = Signal(
-            symbol, action, float(price),
-            take_profit=body.get("tp"), stop_loss=body.get("sl"),
+            symbol,
+            action,
+            price,
+            take_profit=take_profit,
+            stop_loss=stop_loss,
             reason="tradingview webhook",
         )
-        result = executor.execute(signal)
-        log("hook", symbol, result["message"])
+        try:
+            result = runtime.execute(signal, source="webhook", request_id=event_id)
+        except Exception as exc:
+            try:
+                store.release_webhook_event(event_id)
+            except Exception:
+                pass
+            return jsonify({"status": "ERROR", "message": str(exc)}), 503
         payload = {"status": result["status"], "message": result["message"]}
         if result.get("position"):
             payload["position"] = _position_dict(result["position"])
+        if result["status"] == "ERROR":
+            try:
+                store.release_webhook_event(event_id)
+            except Exception:
+                pass
+            return jsonify(payload), 503
         return jsonify(payload)
 
     return app
 
 
 def run() -> None:  # pragma: no cover - manual entry point
-    cfg = load_config()
-    app = create_app(cfg)
-    app.run(host=cfg.web_host, port=cfg.web_port, debug=False)
+    from cli import cmd_web
+
+    cmd_web(load_config())
 
 
 if __name__ == "__main__":  # pragma: no cover

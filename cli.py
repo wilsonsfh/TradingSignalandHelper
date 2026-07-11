@@ -51,17 +51,27 @@ def cmd_demo(cfg) -> None:
 
 def cmd_web(cfg) -> None:
     from web.app import create_app, build_broker
+    from state.store import StateStore
 
-    broker = build_broker(cfg)
+    cfg.validate()
+    store = StateStore(cfg.state_db_path)
+    initial_positions = store.load_positions(open_only=True)
+    broker = build_broker(cfg, initial_positions=initial_positions)
     if cfg.broker == "moomoo":
         try:
             broker.connect()
             print("Connected to moomoo via OpenD.")
         except Exception as exc:
             print(f"WARNING: moomoo not connected — {exc}\nServing dashboard anyway; trades will error until connected.")
-    app = create_app(cfg, broker=broker)
+    app = create_app(cfg, broker=broker, store=store)
+    runtime = app.extensions["trading_runtime"]
     print(f"Dashboard: http://{cfg.web_host}:{cfg.web_port}   (mode: {cfg.mode_label}, data: {cfg.data_source})")
-    app.run(host=cfg.web_host, port=cfg.web_port, debug=False)
+    runtime.start()
+    try:
+        app.run(host=cfg.web_host, port=cfg.web_port, debug=False)
+    finally:
+        runtime.stop()
+        store.close()
 
 
 def main() -> None:
