@@ -9,6 +9,28 @@ development; follow it only when you deploy a real (paper) bridge.
 > until the gated plan in `docs/superpowers/specs/2026-07-12-real-mode-enablement.md`
 > is completed and explicitly approved.
 
+## Two layers, and where to host each
+
+| Layer | What it does | Where it runs | Scaffold |
+|---|---|---|---|
+| 1 — Notifier | Receive TradingView webhook → validate → log → **Telegram** + dashboard | Cloudflare Worker (serverless, always-on), personal account | `cloudflare-notifier/` |
+| 2 — Executor | Actually place moomoo orders via **OpenD** (entry + TP + stop OCO) | A **persistent host** — cannot be a Worker | see options below |
+
+Layer 1 gets you event-driven **signals + Telegram** today. Add Layer 2 when you want
+the alert to also trade. Both sit under your **personal `wilsonsfh`** Cloudflare account
+(never corporate — the danes-musings separation).
+
+**Host options for Layer 2 (pick one):**
+
+- **Local Mac + Cloudflare Tunnel** — fastest, zero cost, reuses the bridge you already
+  have; runs while your Mac is on. See `cloudflare-tunnel/`.
+- **Zo Computer (zo.computer)** — 24/7 personal cloud PC with native Telegram; always-on
+  without a VM; paid, third-party.
+- **VM (EC2/Lightsail)** — the Curteis-style always-on box; most control/ops. This runbook.
+
+The bridge sends Telegram alerts itself (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`), so
+Layer 2 notifies you even without Layer 1.
+
 ## Topology
 
 ```text

@@ -16,6 +16,14 @@
 
 ## Completed
 
+- **2026-07-12 — Telegram alerts (bridge) + Layer-2 host scaffolds.** The Python bridge
+  now sends best-effort, non-blocking **Telegram** notifications on open / close /
+  auto-exit (TP/SL/stop) / rejection (`notify/telegram.py`, config-gated via
+  `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`; 194 tests green). Added `cloudflare-tunnel/`
+  (front the local executor under the personal account with Access) and a
+  two-layer / three-host deploy overview (local+Tunnel · Zo Computer · VM). Notifier
+  Worker + tunnel deploy stays gated on personal-account auth + Telegram secrets.
+
 - **2026-07-12 — Cloudflare Telegram notifier scaffolded (deploy pending owner auth).**
   `cloudflare-notifier/` is a Worker (Wrangler, wilsonsfh account — same model as
   danes-musings) that receives TradingView webhooks, logs them to KV, serves a small
