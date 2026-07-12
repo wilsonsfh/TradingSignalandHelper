@@ -31,6 +31,12 @@ class FakeTradeContext:
         self.missing_entry_order_id = False
         self.missing_tp_order_id = False
         self.missing_exit_order_id = False
+        self.fail_stop = False
+        self.stop_status = "SUBMITTED"
+        self.stop_fill = 0.0
+        self.stop_dealt_qty = 0.0
+        self.missing_stop_order_id = False
+        self.stop_fill_on_cancel = None
 
     def place_order(self, **kwargs):
         self.calls.append(("place_order", kwargs))
@@ -54,6 +60,15 @@ class FakeTradeContext:
                 "dealt_avg_price": [0.0],
                 "dealt_qty": [0.0],
             })
+        if kwargs["order_type"] == "STOP":
+            if self.fail_stop:
+                return -1, "stop rejected"
+            return 0, pd.DataFrame({
+                "order_id": [None if self.missing_stop_order_id else "stop-1"],
+                "order_status": ["SUBMITTED"],
+                "dealt_avg_price": [0.0],
+                "dealt_qty": [0.0],
+            })
         if self.fail_exit:
             return -1, "exit rejected"
         return 0, pd.DataFrame({
@@ -69,6 +84,8 @@ class FakeTradeContext:
             status, price, dealt_qty = self.entry_status, self.entry_fill, self.entry_dealt_qty
         elif kwargs["order_id"] == "exit-1":
             status, price, dealt_qty = self.exit_status, self.exit_fill, self.exit_dealt_qty
+        elif kwargs["order_id"] == "stop-1":
+            status, price, dealt_qty = self.stop_status, self.stop_fill, self.stop_dealt_qty
         else:
             status = self.tp_status
             price = 103.0 if self.tp_dealt_qty else 0.0
@@ -98,6 +115,10 @@ class FakeTradeContext:
             if self.tp_fill_on_cancel is not None:
                 self.tp_dealt_qty = self.tp_fill_on_cancel
             self.tp_status = "CANCELLED_PART" if self.tp_dealt_qty else "CANCELLED_ALL"
+        if order_id == "stop-1":
+            if self.stop_fill_on_cancel is not None:
+                self.stop_dealt_qty = self.stop_fill_on_cancel
+            self.stop_status = "CANCELLED_PART" if self.stop_dealt_qty else "CANCELLED_ALL"
         return 0, pd.DataFrame({"order_id": [order_id]})
 
     def close(self):
@@ -130,7 +151,7 @@ class FakeSDK:
     TrdMarket = SimpleNamespace(US="US")
     TrdEnv = SimpleNamespace(SIMULATE="SIMULATE", REAL="REAL")
     TrdSide = SimpleNamespace(BUY="BUY", SELL="SELL")
-    OrderType = SimpleNamespace(MARKET="MARKET", NORMAL="NORMAL")
+    OrderType = SimpleNamespace(MARKET="MARKET", NORMAL="NORMAL", STOP="STOP")
     ModifyOrderOp = SimpleNamespace(CANCEL="CANCEL")
 
     def __init__(self):
@@ -158,6 +179,12 @@ def bracket(quantity=1):
 def connected_broker(sdk=None):
     sdk = sdk or FakeSDK()
     return MoomooBroker(sdk=sdk).connect(), sdk
+
+
+def stop_broker(sdk=None):
+    """Broker with the resting broker stop-loss order enabled."""
+    sdk = sdk or FakeSDK()
+    return MoomooBroker(sdk=sdk, use_broker_stop_order=True).connect(), sdk
 
 
 def test_import_and_construct_without_sdk():
@@ -586,3 +613,90 @@ def test_disconnect_attempts_both_contexts_when_one_close_fails():
     assert sdk.quote.closed is True
     assert broker._ctx is None
     assert broker._quote is None
+
+
+# ───────── broker stop-loss order (manual OCO) ─────────
+
+def test_broker_stop_order_placed_after_entry_and_tp():
+    broker, sdk = stop_broker()
+    position = broker.place_bracket(bracket())
+    assert position.stop_loss_order_id == "stop-1"
+    assert position.stop_loss_order_quantity == 1
+    stop_call = next(
+        c for n, c in sdk.trade.calls
+        if n == "place_order" and c["order_type"] == "STOP"
+    )
+    assert stop_call["trd_side"] == "SELL"
+    assert stop_call["aux_price"] == 98.0
+
+
+def test_soft_stop_disabled_when_broker_stop_rests():
+    broker, sdk = stop_broker()
+    position = broker.place_bracket(bracket())
+    broker.update_price("AAPL", 97.0)
+    assert position.status == "OPEN"
+    assert not any(
+        n == "place_order" and c["trd_side"] == "SELL" and c["order_type"] == "MARKET"
+        for n, c in sdk.trade.calls
+    )
+
+
+def test_stop_fill_cancels_take_profit():
+    broker, sdk = stop_broker()
+    position = broker.place_bracket(bracket())
+    sdk.trade.stop_status = "FILLED_ALL"
+    sdk.trade.stop_fill = 98.0
+    sdk.trade.stop_dealt_qty = 1.0
+
+    assert broker.update_price("AAPL", 98.0) == [position]
+    assert position.status == "CLOSED"
+    assert position.close_reason == "STOP_LOSS"
+    assert position.take_profit_order_id is None
+    assert any(
+        n == "modify_order" and c["order_id"] == "tp-1" for n, c in sdk.trade.calls
+    )
+
+
+def test_tp_fill_cancels_stop():
+    broker, sdk = stop_broker()
+    position = broker.place_bracket(bracket())
+    sdk.trade.tp_status = "FILLED_ALL"
+    sdk.trade.tp_dealt_qty = 1.0
+
+    assert broker.update_price("AAPL", 103.0) == [position]
+    assert position.status == "CLOSED"
+    assert position.close_reason == "TAKE_PROFIT"
+    assert position.stop_loss_order_id is None
+    assert any(
+        n == "modify_order" and c["order_id"] == "stop-1" for n, c in sdk.trade.calls
+    )
+
+
+def test_manual_close_cancels_both_legs():
+    broker, sdk = stop_broker()
+    position = broker.place_bracket(bracket())
+    sdk.trade.exit_status = "FILLED_ALL"
+    sdk.trade.exit_fill = 99.0
+    sdk.trade.exit_dealt_qty = 1.0
+
+    broker.close("AAPL", 99.0, reason="MANUAL")
+
+    assert position.status == "CLOSED"
+    cancelled = {c["order_id"] for n, c in sdk.trade.calls if n == "modify_order"}
+    assert "stop-1" in cancelled and "tp-1" in cancelled
+
+
+def test_broker_stop_rejection_falls_back_to_soft_protection():
+    broker, sdk = stop_broker()
+    sdk.trade.fail_stop = True
+    position = broker.place_bracket(bracket())
+    assert position.status == "OPEN_UNPROTECTED"
+    assert position.stop_loss_order_id is None
+
+
+def test_missing_stop_order_id_quarantines_position():
+    broker, sdk = stop_broker()
+    sdk.trade.missing_stop_order_id = True
+    with pytest.raises(RuntimeError, match="manual reconciliation"):
+        broker.place_bracket(bracket())
+    assert broker.open_positions()[0].status == "OPEN_PROTECTION_UNKNOWN"

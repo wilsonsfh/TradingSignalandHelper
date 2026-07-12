@@ -56,6 +56,7 @@ def build_broker(
             host=cfg.opend_host,
             port=cfg.opend_port,
             trd_env=cfg.trd_env,
+            use_broker_stop_order=cfg.use_broker_stop_order,
             initial_positions=initial_positions,
         )
     return MockBroker(initial_positions)

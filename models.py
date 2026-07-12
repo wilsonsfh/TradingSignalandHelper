@@ -64,5 +64,7 @@ class Position:
     entry_order_id: Optional[str] = None
     take_profit_order_id: Optional[str] = None
     take_profit_order_quantity: Optional[float] = None
+    stop_loss_order_id: Optional[str] = None
+    stop_loss_order_quantity: Optional[float] = None
     exit_order_id: Optional[str] = None
     exit_order_quantity: Optional[float] = None

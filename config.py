@@ -50,6 +50,9 @@ class Config:
     max_alert_quantity: int = field(
         default_factory=lambda: int(os.getenv("MAX_ALERT_QUANTITY", "100"))
     )
+    use_broker_stop_order: bool = field(
+        default_factory=lambda: _env_bool("USE_BROKER_STOP_ORDER", False)
+    )
     web_host: str = field(default_factory=lambda: os.getenv("WEB_HOST", "127.0.0.1"))
     web_port: int = field(default_factory=lambda: int(os.getenv("WEB_PORT", "5000")))
 

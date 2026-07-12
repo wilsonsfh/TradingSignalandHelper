@@ -49,6 +49,7 @@ class MoomooBroker(Broker):
         market: str = "US",
         trade_password: Optional[str] = None,
         sdk: Any = None,
+        use_broker_stop_order: bool = False,
         initial_positions: Optional[Iterable[Position]] = None,
     ) -> None:
         environment = trd_env.upper()
@@ -61,6 +62,7 @@ class MoomooBroker(Broker):
         self.trd_env = environment
         self.market = market.upper()
         self._trade_password = trade_password
+        self._use_broker_stop_order = use_broker_stop_order
         self._sdk = sdk
         self._ctx = None
         self._quote = None
@@ -184,7 +186,7 @@ class MoomooBroker(Broker):
         )
         self._positions.append(position)
         if position.status == "OPEN":
-            self._place_take_profit(position)
+            self._place_protection(position)
         return position
 
     def update_price(self, symbol: str, price: float) -> List[Position]:
@@ -226,6 +228,7 @@ class MoomooBroker(Broker):
                 )
                 position.take_profit_order_quantity = original_quantity
                 if self._is_filled(status) or dealt_quantity >= original_quantity:
+                    self._cancel_stop_if_any(position)
                     self._mark_closed(
                         position,
                         fill_price or position.take_profit or price,
@@ -239,12 +242,44 @@ class MoomooBroker(Broker):
                     position.take_profit_order_id = None
                     position.take_profit_order_quantity = None
                     position.status = "OPEN_UNPROTECTED"
+            if position.stop_loss_order_id:
+                status, fill_price, dealt_quantity = self._query_order(
+                    position.stop_loss_order_id
+                )
+                stop_quantity = float(
+                    position.stop_loss_order_quantity or position.quantity
+                )
+                position.stop_loss_order_quantity = stop_quantity
+                if self._is_filled(status) or dealt_quantity >= stop_quantity:
+                    if position.take_profit_order_id:
+                        try:
+                            self._cancel_order(
+                                position.take_profit_order_id, "take-profit"
+                            )
+                        except RuntimeError:
+                            pass
+                        position.take_profit_order_id = None
+                        position.take_profit_order_quantity = None
+                    self._mark_closed(
+                        position,
+                        fill_price or position.stop_loss or price,
+                        "STOP_LOSS",
+                    )
+                    closed.append(position)
+                    continue
+                if self._is_terminal(status):
+                    position.stop_loss_order_id = None
+                    position.stop_loss_order_quantity = None
             if position.take_profit is not None and price >= position.take_profit:
                 if not position.take_profit_order_id:
                     self._exit_position(position, price, "TAKE_PROFIT")
                     if position.status == "CLOSED":
                         closed.append(position)
-            elif position.stop_loss is not None and price <= position.stop_loss:
+            elif (
+                position.stop_loss is not None
+                and price <= position.stop_loss
+                and not position.stop_loss_order_id
+            ):
                 self._exit_position(position, price, "STOP_LOSS")
                 if position.status == "CLOSED":
                     closed.append(position)
@@ -293,7 +328,7 @@ class MoomooBroker(Broker):
             raise RuntimeError(f"moomoo {role} response has no order_id")
         return str(order_id)
 
-    def _place_take_profit(self, position: Position) -> None:
+    def _place_tp_order(self, position: Position) -> None:
         if position.take_profit is None:
             return
         ret, data = self._ctx.place_order(
@@ -317,6 +352,46 @@ class MoomooBroker(Broker):
                 "manual reconciliation required"
             ) from exc
 
+    def _place_protection(self, position: Position) -> None:
+        """Arm the take-profit and, if enabled, a resting broker stop-loss."""
+        self._place_tp_order(position)
+        if self._use_broker_stop_order and position.status == "OPEN":
+            self._place_stop_loss(position)
+
+    def _place_stop_loss(self, position: Position) -> None:
+        if position.stop_loss is None:
+            return
+        ret, data = self._ctx.place_order(
+            price=position.stop_loss,
+            qty=position.quantity,
+            code=self._code(position.symbol),
+            trd_side=self._sdk.TrdSide.SELL,
+            order_type=self._sdk.OrderType.STOP,
+            aux_price=position.stop_loss,
+            trd_env=self._env(),
+        )
+        if ret != self._sdk.RET_OK:
+            position.status = "OPEN_UNPROTECTED"
+            return
+        position.stop_loss_order_quantity = float(position.quantity)
+        try:
+            position.stop_loss_order_id = self._order_id(data, "stop-loss")
+        except RuntimeError as exc:
+            position.status = "OPEN_PROTECTION_UNKNOWN"
+            raise RuntimeError(
+                "moomoo accepted stop-loss protection without an order ID; "
+                "manual reconciliation required"
+            ) from exc
+
+    def _cancel_stop_if_any(self, position: Position) -> None:
+        if position.stop_loss_order_id:
+            try:
+                self._cancel_order(position.stop_loss_order_id, "stop-loss")
+            except RuntimeError:
+                pass
+            position.stop_loss_order_id = None
+            position.stop_loss_order_quantity = None
+
     def _query_order(self, order_id: str) -> Tuple[str, float, float]:
         ret, data = self._ctx.order_list_query(
             order_id=order_id,
@@ -339,7 +414,7 @@ class MoomooBroker(Broker):
                 position.quantity = dealt_quantity
             position.avg_price = average
             position.status = "OPEN"
-            self._place_take_profit(position)
+            self._place_protection(position)
         elif dealt_quantity > 0 and average > 0:
             if not self._is_terminal(status):
                 if position.status != "ENTRY_CANCEL_PENDING":
@@ -351,7 +426,7 @@ class MoomooBroker(Broker):
                     position.quantity = dealt_quantity or position.quantity
                     position.avg_price = average
                     position.status = "OPEN"
-                    self._place_take_profit(position)
+                    self._place_protection(position)
                     return
                 if not self._is_terminal(status):
                     position.status = "ENTRY_CANCEL_PENDING"
@@ -359,7 +434,7 @@ class MoomooBroker(Broker):
             position.quantity = dealt_quantity
             position.avg_price = average
             position.status = "OPEN"
-            self._place_take_profit(position)
+            self._place_protection(position)
         elif self._is_terminal(status):
             self._mark_closed(position, 0.0, "ENTRY_CANCELLED")
 
@@ -456,6 +531,7 @@ class MoomooBroker(Broker):
             if position.status == "ENTRY_CANCEL_PENDING":
                 return
 
+        self._cancel_stop_if_any(position)
         remaining_quantity = float(position.quantity)
         if position.take_profit_order_id:
             status, fill_price, dealt_quantity = self._query_order(
