@@ -47,6 +47,9 @@ class Config:
     webhook_max_age_seconds: int = field(
         default_factory=lambda: int(os.getenv("WEBHOOK_MAX_AGE_SECONDS", "300"))
     )
+    max_alert_quantity: int = field(
+        default_factory=lambda: int(os.getenv("MAX_ALERT_QUANTITY", "100"))
+    )
     web_host: str = field(default_factory=lambda: os.getenv("WEB_HOST", "127.0.0.1"))
     web_port: int = field(default_factory=lambda: int(os.getenv("WEB_PORT", "5000")))
 
@@ -71,6 +74,8 @@ class Config:
             raise ValueError("BROKER=moomoo requires DATA_SOURCE=yfinance")
         if self.quantity <= 0 or self.soft_stop_poll_seconds <= 0:
             raise ValueError("QUANTITY and SOFT_STOP_POLL_SECONDS must be positive")
+        if self.max_alert_quantity <= 0:
+            raise ValueError("MAX_ALERT_QUANTITY must be positive")
 
 
 def load_config() -> Config:

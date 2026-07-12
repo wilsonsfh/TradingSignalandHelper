@@ -408,11 +408,11 @@ def test_webhook_rejects_bad_key():
     assert broker.open_positions() == []
 
 
-def test_webhook_buy_uses_server_price_and_risk_defaults():
+def test_webhook_buy_falls_back_to_risk_defaults_when_absent():
     app, broker = _app(webhook_enabled=True)
     response = app.test_client().post(
         "/webhook",
-        json=_alert(price=100.0, tp=200.0, sl=50.0),
+        json=_alert(price=100.0),  # no tp/sl in the alert -> server computes from pct
     )
     assert response.status_code == 200
     assert response.get_json()["status"] == "OPENED"
@@ -420,6 +420,27 @@ def test_webhook_buy_uses_server_price_and_risk_defaults():
     assert position.avg_price == 12.0
     assert position.take_profit == 12.36
     assert position.stop_loss == 11.76
+
+
+def test_webhook_honors_alert_tp_sl_quantity():
+    app, broker = _app(webhook_enabled=True)
+    response = app.test_client().post(
+        "/webhook",
+        json=_alert(tp=13.0, sl=11.0, quantity=4),
+    )
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "OPENED"
+    position = broker.open_positions()[0]
+    assert position.take_profit == 13.0
+    assert position.stop_loss == 11.0
+    assert position.quantity == 4
+
+
+def test_webhook_rejects_quantity_over_cap():
+    app, broker = _app(webhook_enabled=True)
+    response = app.test_client().post("/webhook", json=_alert(quantity=10_000))
+    assert response.status_code == 400
+    assert broker.open_positions() == []
 
 
 def test_webhook_close_executes():

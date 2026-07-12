@@ -39,6 +39,18 @@ def test_new_settings_use_safe_defaults(monkeypatch):
     assert cfg.webhook_max_age_seconds == 300
 
 
+def test_max_alert_quantity_default(monkeypatch):
+    monkeypatch.delenv("MAX_ALERT_QUANTITY", raising=False)
+    assert Config().max_alert_quantity == 100
+
+
+def test_nonpositive_max_alert_quantity_fails_closed():
+    cfg = Config()
+    cfg.max_alert_quantity = 0
+    with pytest.raises(ValueError, match="MAX_ALERT_QUANTITY"):
+        cfg.validate()
+
+
 @pytest.mark.parametrize(
     ("attribute", "value"),
     [("quantity", 0), ("soft_stop_poll_seconds", 0.0)],

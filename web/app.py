@@ -25,17 +25,8 @@ from broker.mock_broker import MockBroker
 from trader.executor import Executor
 from trader.runtime import TradingRuntime
 from state.store import StateStore
-from models import Action, Signal, Position
-
-
-def _action_from_alert(body: Dict[str, Any]) -> Optional[Action]:
-    action = str(body.get("action", "")).lower()
-    side = str(body.get("side", "")).lower()
-    if action == "close" or side in ("sell", "short") or action in ("sell", "short", "exit"):
-        return Action.SELL
-    if side in ("buy", "long") or action in ("buy", "long", "open"):
-        return Action.BUY
-    return None
+from signals.alerts import AlertError, parse_alert
+from models import Signal, Position
 
 
 def _build_feed(cfg: Config, broker: Broker):
@@ -283,56 +274,50 @@ def create_app(
                 "message": "webhook auto-trading is disabled in REAL-money mode",
             }), 403
 
-        event_id = str(body.get("event_id", "")).strip()
-        timestamp = str(body.get("timestamp", "")).strip()
-        if not event_id or not timestamp:
-            return jsonify({"status": "ERROR", "message": "event_id and timestamp are required"}), 400
         try:
-            occurred_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            if occurred_at.tzinfo is None:
-                raise ValueError("timestamp needs a timezone")
-        except ValueError:
-            return jsonify({"status": "ERROR", "message": "timestamp must be timezone-aware ISO-8601"}), 400
-        age = abs((datetime.now(timezone.utc) - occurred_at.astimezone(timezone.utc)).total_seconds())
-        if age > cfg.webhook_max_age_seconds:
-            return jsonify({"status": "EXPIRED", "message": "webhook event is too old or too far in the future"}), 400
+            alert = parse_alert(
+                body,
+                watchlist=cfg.watchlist,
+                max_quantity=cfg.max_alert_quantity,
+                max_age_seconds=cfg.webhook_max_age_seconds,
+            )
+        except AlertError as exc:
+            return jsonify({"status": exc.label, "message": str(exc)}), exc.status
 
-        symbol_value = body.get("symbol")
-        if symbol_value is not None and not isinstance(symbol_value, str):
-            return jsonify({"status": "ERROR", "message": "symbol must be a string"}), 400
-        symbol = (symbol_value or "").upper()
-        if not symbol:
-            return jsonify({"status": "ERROR", "message": "symbol is required"}), 400
-        if symbol not in cfg.watchlist:
-            return jsonify({"status": "FORBIDDEN", "message": "symbol is outside the watchlist"}), 403
-        action = _action_from_alert(body)
-        if action is None:
-            return jsonify({"status": "ERROR", "message": "could not determine buy/sell/close"}), 400
+        event_id = alert.event_id
+        symbol = alert.symbol
 
         try:
             price = float(feed.last_price(symbol))
         except Exception as exc:
             return jsonify({"status": "ERROR", "message": f"no price available: {exc}"}), 503
         try:
-            claimed = store.claim_webhook_event(event_id, occurred_at.isoformat())
+            claimed = store.claim_webhook_event(event_id, alert.occurred_at.isoformat())
         except Exception as exc:
             return jsonify({"status": "ERROR", "message": str(exc)}), 503
         if not claimed:
             return jsonify({"status": "REPLAY", "message": "event_id was already processed"}), 409
 
-        take_profit = None
-        stop_loss = None
-        if action is Action.BUY:
-            take_profit = round(price * (1 + cfg.take_profit_pct / 100), 2)
-            stop_loss = round(price * (1 - cfg.stop_loss_pct / 100), 2)
+        # The alert (Pine script) is the brain: honor its tp/sl when present,
+        # falling back to the configured risk percentages only when absent.
+        take_profit = alert.take_profit
+        stop_loss = alert.stop_loss
+        if alert.action == "open":
+            if take_profit is None:
+                take_profit = round(price * (1 + cfg.take_profit_pct / 100), 2)
+            if stop_loss is None:
+                stop_loss = round(price * (1 - cfg.stop_loss_pct / 100), 2)
+        else:
+            take_profit = stop_loss = None
 
         signal = Signal(
             symbol,
-            action,
+            alert.side,
             price,
             take_profit=take_profit,
             stop_loss=stop_loss,
             reason="tradingview webhook",
+            quantity=alert.quantity,
         )
         try:
             result = runtime.execute(signal, source="webhook", request_id=event_id)

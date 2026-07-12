@@ -15,7 +15,16 @@ from models import Action
 
 
 class AlertError(ValueError):
-    """Raised when an alert body is malformed or out of bounds."""
+    """Raised when an alert body is malformed or out of bounds.
+
+    Carries the HTTP status/label the webhook should return, so specific
+    rejections (e.g. out-of-watchlist) keep their existing response codes.
+    """
+
+    def __init__(self, message: str, *, status: int = 400, label: str = "ERROR") -> None:
+        super().__init__(message)
+        self.status = status
+        self.label = label
 
 
 _OPEN = {"open", "buy", "long"}
@@ -91,7 +100,7 @@ def parse_alert(
     if not symbol:
         raise AlertError("symbol is required")
     if symbol not in watchlist:
-        raise AlertError("symbol is outside the watchlist")
+        raise AlertError("symbol is outside the watchlist", status=403, label="FORBIDDEN")
 
     quantity: Optional[int] = None
     if body.get("quantity") is not None:
