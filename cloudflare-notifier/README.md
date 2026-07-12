@@ -42,23 +42,45 @@ Worker) also POST to the local bridge via a Cloudflare Tunnel.
   Then only your browser SSO can read the dashboard — this is the "open browser to
   authenticate" step.
 
-## Deploy (what YOU do — I pre-built the code)
+## ⚠️ Use your PERSONAL account, not the corporate one
 
-Prereqs: Node 18+, and a Telegram bot (below).
+This is a personal project. It must deploy to your **personal `wilsonsfh` Cloudflare
+account** (the one with the `wilsonsfh.workers.dev` subdomain, like danes-musings) —
+**never** the corporate `wsoon@cloudflare.com` account. On a work Mac, `wrangler` is
+usually already logged into the corporate account, so **don't** rely on the ambient
+login. Two clean ways to target the personal account without clobbering the corporate one:
+
+**Option A — personal API token (recommended; leaves corporate login untouched):**
+Personal dashboard → *Manage Account → API Tokens* → create a token with *Workers Scripts:Edit*
++ *Workers KV Storage:Edit* for the personal account, then:
+
+```bash
+export CLOUDFLARE_API_TOKEN=<personal-account-token>
+export CLOUDFLARE_ACCOUNT_ID=<personal-account-id>
+```
+
+**Option B — switch the browser login** (simpler, but replaces the corporate OAuth session):
+`npx wrangler logout && npx wrangler login`  ← browser: sign in as the personal account.
+
+## Deploy (what YOU do — I pre-built + typechecked the code)
+
+Prereqs: Node 18+, a Telegram bot (below), and the personal-account auth above.
 
 ```bash
 cd cloudflare-notifier
 npm install
-npx wrangler login                       # ← browser: authenticate the wilsonsfh account
-npx wrangler kv namespace create EVENTS  # copy the printed id into wrangler.jsonc kv_namespaces[0].id
-npx wrangler secret put WEBHOOK_SECRET    # paste 32+ random chars
+# generate a strong shared secret (also paste this into the TradingView alert `key`):
+openssl rand -hex 24
+npx wrangler kv namespace create EVENTS   # paste the printed id into wrangler.jsonc kv_namespaces[0].id
+npx wrangler secret put WEBHOOK_SECRET     # paste the openssl value
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put TELEGRAM_CHAT_ID
-npm run deploy                            # wrangler deploy
+npm run deploy
 ```
 
-Then in the dashboard, enable Cloudflare Access on the Worker's `workers.dev` URL to
-protect `/` and `/api/events`.
+Then in the personal dashboard, enable Cloudflare Access on the Worker's `workers.dev`
+URL to protect `/` and `/api/events` (this is the "open browser to authenticate" step
+for the human dashboard).
 
 ## Telegram bot (one-time)
 
