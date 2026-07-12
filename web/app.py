@@ -113,12 +113,15 @@ def create_app(
     strategy = EMACrossover(cfg.ema_fast, cfg.ema_slow, cfg.take_profit_pct, cfg.stop_loss_pct)
     engine = SignalEngine(strategy, feed, cfg.candle_period, cfg.candle_interval)
     executor = Executor(broker, cfg.quantity)
+    from notify.telegram import TelegramNotifier
+
     runtime = runtime or TradingRuntime(
         broker,
         feed,
         executor,
         store,
         poll_seconds=cfg.soft_stop_poll_seconds,
+        notifier=TelegramNotifier(cfg.telegram_bot_token, cfg.telegram_chat_id),
     )
 
     app = Flask(__name__)

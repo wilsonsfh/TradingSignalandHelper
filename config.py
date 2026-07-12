@@ -70,6 +70,8 @@ class Config:
     webhook_rate_per_min: int = field(
         default_factory=lambda: int(os.getenv("WEBHOOK_RATE_PER_MIN", "5"))
     )
+    telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
+    telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
     web_host: str = field(default_factory=lambda: os.getenv("WEB_HOST", "127.0.0.1"))
     web_port: int = field(default_factory=lambda: int(os.getenv("WEB_PORT", "5000")))
 

@@ -20,6 +20,7 @@ class TradingRuntime:
         executor: Executor,
         store: StateStore,
         poll_seconds: float = 4.0,
+        notifier: Optional[Any] = None,
     ) -> None:
         if poll_seconds <= 0:
             raise ValueError("poll_seconds must be positive")
@@ -28,6 +29,7 @@ class TradingRuntime:
         self.executor = executor
         self.store = store
         self.poll_seconds = poll_seconds
+        self.notifier = notifier
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -43,6 +45,16 @@ class TradingRuntime:
     def _safe_activity(self, kind: str, symbol: str, message: str) -> None:
         try:
             self.store.add_activity(kind, symbol, message)
+        except Exception:
+            pass
+
+    def _notify(self, text: str) -> None:
+        """Best-effort outbound notification; never raises into the trading path."""
+        notifier = self.notifier
+        if notifier is None:
+            return
+        try:
+            notifier.notify(text)
         except Exception:
             pass
 
@@ -117,6 +129,8 @@ class TradingRuntime:
             self.store.add_activity(kind, signal.symbol, result["message"])
             if claimed_symbol and result["status"] != "OPENED" and position is None:
                 self.store.release_symbol(signal.symbol)
+            if result["status"] != "NOOP":
+                self._notify(f"[{source}] {signal.symbol}: {result['message']}")
             return result
 
     def _execute_broker(self, signal: Signal, request_id: str) -> Dict[str, Any]:
@@ -127,6 +141,7 @@ class TradingRuntime:
             self._safe_activity("error", signal.symbol, str(exc))
             if signal.action is Action.BUY:
                 self.store.release_symbol(signal.symbol)
+            self._notify(f"[rejected] {signal.symbol}: {exc}")
             raise
         except Exception as exc:
             for current in self.broker.positions():
@@ -134,6 +149,7 @@ class TradingRuntime:
                     self.store.save_position(current)
             self.store.finish_order(request_id, "ERROR", str(exc))
             self._safe_activity("error", signal.symbol, str(exc))
+            self._notify(f"[error] {signal.symbol}: {exc}")
             raise
 
     def close(
@@ -187,6 +203,7 @@ class TradingRuntime:
                 result.get("position"),
             )
             self.store.add_activity("close", symbol, result["message"])
+            self._notify(f"[close] {symbol}: {result['message']}")
             return result
 
     def poll_once(self) -> List[Position]:
@@ -208,6 +225,9 @@ class TradingRuntime:
                             "auto",
                             item.symbol,
                             f"{item.close_reason} @ {item.close_price}",
+                        )
+                        self._notify(
+                            f"auto-exit {item.symbol}: {item.close_reason} @ {item.close_price}"
                         )
                     closed.extend(triggered)
                 except Exception as exc:
