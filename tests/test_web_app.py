@@ -40,7 +40,8 @@ def _cfg(watchlist):
     return c
 
 
-def _app(webhook_enabled=False, webhook_secret=WEBHOOK_TEST_SECRET):
+def _app(webhook_enabled=False, webhook_secret=WEBHOOK_TEST_SECRET, ip_allowlist=None,
+         signature_required=False, rate_per_min=5):
     feed = FakeFeed({
         "UP": [10, 10, 10, 10, 10, 10, 12],    # BUY
         "DN": [10, 10, 10, 10, 10, 10, 8],     # SELL
@@ -50,6 +51,9 @@ def _app(webhook_enabled=False, webhook_secret=WEBHOOK_TEST_SECRET):
     config = _cfg(["UP", "DN", "FLAT"])
     config.webhook_enabled = webhook_enabled
     config.webhook_secret = webhook_secret
+    config.webhook_ip_allowlist = ip_allowlist or []
+    config.webhook_signature_required = signature_required
+    config.webhook_rate_per_min = rate_per_min
     app = create_app(config=config, feed=feed, broker=broker)
     app.testing = True
     return app, broker
@@ -459,6 +463,56 @@ def test_api_events_records_rejected_alert():
     client.post("/webhook", json=_alert(symbol="NOPE"))  # out of watchlist
     statuses = {e["status"] for e in client.get("/api/events").get_json()["events"]}
     assert "FORBIDDEN" in statuses
+
+
+def test_webhook_rejects_unlisted_ip():
+    app, broker = _app(webhook_enabled=True, ip_allowlist=["203.0.113.9"])
+    r = app.test_client().post(
+        "/webhook", json=_alert(), environ_overrides={"REMOTE_ADDR": "10.0.0.1"}
+    )
+    assert r.status_code == 403
+    assert r.get_json()["status"] == "IP_FORBIDDEN"
+    assert broker.open_positions() == []
+
+
+def test_webhook_allows_listed_ip():
+    app, _ = _app(webhook_enabled=True, ip_allowlist=["10.0.0.1"])
+    r = app.test_client().post(
+        "/webhook", json=_alert(), environ_overrides={"REMOTE_ADDR": "10.0.0.1"}
+    )
+    assert r.status_code == 200
+
+
+def test_webhook_requires_valid_hmac_when_enabled():
+    import hashlib as _hl
+    import hmac as _hm
+    import json as _json
+
+    app, _ = _app(webhook_enabled=True, signature_required=True)
+    body = _alert()
+    raw = _json.dumps(body).encode()
+    sig = _hm.new(WEBHOOK_TEST_SECRET.encode(), raw, _hl.sha256).hexdigest()
+    good = app.test_client().post(
+        "/webhook", data=raw, content_type="application/json",
+        headers={"X-Signature": sig},
+    )
+    assert good.status_code == 200
+    bad = app.test_client().post(
+        "/webhook", data=raw, content_type="application/json",
+        headers={"X-Signature": "deadbeef"},
+    )
+    assert bad.status_code == 401
+    assert bad.get_json()["status"] == "BAD_SIGNATURE"
+
+
+def test_webhook_rate_limited_after_threshold():
+    app, _ = _app(webhook_enabled=True, rate_per_min=2)
+    client = app.test_client()
+    assert client.post("/webhook", json=_alert(event_id="a", symbol="UP")).status_code == 200
+    assert client.post("/webhook", json=_alert(event_id="b", symbol="DN")).status_code == 200
+    blocked = client.post("/webhook", json=_alert(event_id="c", symbol="FLAT"))
+    assert blocked.status_code == 429
+    assert blocked.get_json()["status"] == "RATE_LIMITED"
 
 
 def test_webhook_close_executes():

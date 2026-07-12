@@ -51,6 +51,28 @@ def test_nonpositive_max_alert_quantity_fails_closed():
         cfg.validate()
 
 
+def test_bridge_security_defaults(monkeypatch):
+    for name in (
+        "USE_BROKER_STOP_ORDER",
+        "WEBHOOK_SIGNATURE_REQUIRED",
+        "WEBHOOK_IP_ALLOWLIST",
+        "WEBHOOK_RATE_PER_MIN",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    cfg = Config()
+    assert cfg.use_broker_stop_order is False
+    assert cfg.webhook_signature_required is False
+    assert cfg.webhook_ip_allowlist == []  # opt-in; edge/WAF handles it in prod
+    assert cfg.webhook_rate_per_min == 5
+
+
+def test_nonpositive_rate_limit_fails_closed():
+    cfg = Config()
+    cfg.webhook_rate_per_min = 0
+    with pytest.raises(ValueError, match="WEBHOOK_RATE_PER_MIN"):
+        cfg.validate()
+
+
 @pytest.mark.parametrize(
     ("attribute", "value"),
     [("quantity", 0), ("soft_stop_poll_seconds", 0.0)],

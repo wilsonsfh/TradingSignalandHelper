@@ -17,6 +17,11 @@ def _split_csv(value: str) -> List[str]:
     return [item.strip().upper() for item in value.split(",") if item.strip()]
 
 
+def _split_plain(value: str) -> List[str]:
+    """Split a CSV without upper-casing (for IPs, which must not be mangled)."""
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 def _env_bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
 
@@ -53,6 +58,18 @@ class Config:
     use_broker_stop_order: bool = field(
         default_factory=lambda: _env_bool("USE_BROKER_STOP_ORDER", False)
     )
+    webhook_signature_required: bool = field(
+        default_factory=lambda: _env_bool("WEBHOOK_SIGNATURE_REQUIRED", False)
+    )
+    # Empty by default: enforce only when explicitly configured. In production put
+    # TradingView's published webhook IPs here (and/or allow-list them at the edge,
+    # e.g. Cloudflare WAF): 52.89.214.238,34.212.75.30,54.218.53.128,52.32.178.7
+    webhook_ip_allowlist: List[str] = field(
+        default_factory=lambda: _split_plain(os.getenv("WEBHOOK_IP_ALLOWLIST", ""))
+    )
+    webhook_rate_per_min: int = field(
+        default_factory=lambda: int(os.getenv("WEBHOOK_RATE_PER_MIN", "5"))
+    )
     web_host: str = field(default_factory=lambda: os.getenv("WEB_HOST", "127.0.0.1"))
     web_port: int = field(default_factory=lambda: int(os.getenv("WEB_PORT", "5000")))
 
@@ -79,6 +96,8 @@ class Config:
             raise ValueError("QUANTITY and SOFT_STOP_POLL_SECONDS must be positive")
         if self.max_alert_quantity <= 0:
             raise ValueError("MAX_ALERT_QUANTITY must be positive")
+        if self.webhook_rate_per_min <= 0:
+            raise ValueError("WEBHOOK_RATE_PER_MIN must be positive")
 
 
 def load_config() -> Config:

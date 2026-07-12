@@ -11,6 +11,7 @@ Real-money mode (BROKER=moomoo + TRD_ENV=REAL) requires "confirm": true in the b
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional
@@ -121,6 +122,9 @@ def create_app(
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
     app.extensions["trading_runtime"] = runtime
+    from web.ratelimit import RateLimiter
+
+    app.extensions["webhook_rate_limiter"] = RateLimiter(cfg.webhook_rate_per_min)
 
     def _json_body():
         body = request.get_json(silent=True)
@@ -282,6 +286,21 @@ def create_app(
                 "status": "MISCONFIGURED",
                 "message": "configure a non-default WEBHOOK_SECRET",
             }), 503
+        remote = (
+            request.headers.get("X-Forwarded-For", request.remote_addr or "")
+            .split(",")[0]
+            .strip()
+        )
+        if cfg.webhook_ip_allowlist and remote not in cfg.webhook_ip_allowlist:
+            return jsonify({"status": "IP_FORBIDDEN", "message": "source IP is not allow-listed"}), 403
+        if not app.extensions["webhook_rate_limiter"].allow(remote or "anon"):
+            return jsonify({"status": "RATE_LIMITED", "message": "too many requests"}), 429
+        raw = request.get_data(cache=True)
+        if cfg.webhook_signature_required:
+            supplied = request.headers.get("X-Signature", "")
+            expected = hmac.new(cfg.webhook_secret.encode(), raw, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(supplied, expected):
+                return jsonify({"status": "BAD_SIGNATURE", "message": "missing or invalid signature"}), 401
         body = _json_body()
         if body is None:
             return jsonify({"status": "ERROR", "message": "JSON body must be an object"}), 400
