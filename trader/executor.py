@@ -21,13 +21,15 @@ class Executor:
 
     def execute(self, signal: Signal) -> Dict[str, Any]:
         if signal.action is Action.BUY:
+            # The alert may carry its own size; fall back to the configured default.
+            quantity = signal.quantity if signal.quantity else self.quantity
             # Tell the broker the current price so a market order can fill and the
             # soft stop-loss / take-profit watch has a reference point.
             self.broker.update_price(signal.symbol, signal.price)
             order = BracketOrder(
                 symbol=signal.symbol,
                 side=Action.BUY,
-                quantity=self.quantity,
+                quantity=quantity,
                 take_profit=signal.take_profit,
                 stop_loss=signal.stop_loss,
             )
@@ -36,7 +38,7 @@ class Executor:
             return {
                 "status": status,
                 "message": (
-                    f"Opened {self.quantity} {signal.symbol} @ {pos.avg_price}"
+                    f"Opened {quantity} {signal.symbol} @ {pos.avg_price}"
                     if status == "OPENED"
                     else f"Entry submitted for {signal.symbol}"
                 ),

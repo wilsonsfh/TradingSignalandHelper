@@ -19,6 +19,16 @@ def test_buy_signal_opens_position():
     assert opens[0].avg_price == 100.0
 
 
+def test_buy_uses_signal_quantity_over_default():
+    b = MockBroker()
+    ex = Executor(b, quantity=1)
+    res = ex.execute(
+        Signal("AAPL", Action.BUY, 100.0, take_profit=103.0, stop_loss=98.0, quantity=5)
+    )
+    assert res["status"] == "OPENED"
+    assert b.open_positions()[0].quantity == 5
+
+
 def test_sell_signal_closes_open_long():
     b = MockBroker()
     ex = Executor(b, quantity=1)

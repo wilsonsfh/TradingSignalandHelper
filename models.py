@@ -32,6 +32,7 @@ class Signal:
     take_profit: Optional[float] = None
     stop_loss: Optional[float] = None
     reason: str = ""
+    quantity: Optional[int] = None      # alert-supplied size; None => executor default
     timestamp: datetime = field(default_factory=_utcnow)
 
 
