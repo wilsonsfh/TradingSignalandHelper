@@ -443,6 +443,24 @@ def test_webhook_rejects_quantity_over_cap():
     assert broker.open_positions() == []
 
 
+def test_api_events_lists_recorded_alerts():
+    app, _ = _app(webhook_enabled=True)
+    client = app.test_client()
+    client.post("/webhook", json=_alert(event_id="ev-1"))
+    r = client.get("/api/events")
+    assert r.status_code == 200
+    events = r.get_json()["events"]
+    assert any(e["symbol"] == "UP" and e["status"] == "OPENED" for e in events)
+
+
+def test_api_events_records_rejected_alert():
+    app, _ = _app(webhook_enabled=True)
+    client = app.test_client()
+    client.post("/webhook", json=_alert(symbol="NOPE"))  # out of watchlist
+    statuses = {e["status"] for e in client.get("/api/events").get_json()["events"]}
+    assert "FORBIDDEN" in statuses
+
+
 def test_webhook_close_executes():
     app, broker = _app(webhook_enabled=True)
     client = app.test_client()

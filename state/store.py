@@ -130,6 +130,20 @@ class StateStore:
                     request_id TEXT NOT NULL,
                     claimed_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    quantity INTEGER,
+                    tp REAL,
+                    sl REAL,
+                    status TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    event_id TEXT
+                );
                 """
             )
             position_columns = {
@@ -285,6 +299,55 @@ class StateStore:
                 (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def record_event(
+        self,
+        source: str,
+        symbol: str,
+        action: str,
+        quantity: Optional[int],
+        tp: Optional[float],
+        sl: Optional[float],
+        status: str,
+        message: str,
+        event_id: Optional[str] = None,
+    ) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO events (
+                    ts, source, symbol, action, quantity, tp, sl, status, message, event_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    datetime.now(timezone.utc).isoformat(),
+                    source,
+                    symbol,
+                    action,
+                    quantity,
+                    tp,
+                    sl,
+                    status,
+                    message,
+                    event_id,
+                ),
+            )
+
+    def recent_events(self, limit: int = 50) -> List[Dict[str, object]]:
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT ts, source, symbol, action, quantity, tp, sl, status, message, event_id
+                FROM events ORDER BY id DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        events: List[Dict[str, object]] = []
+        for row in rows:
+            item = dict(row)
+            item["time"] = datetime.fromisoformat(str(item["ts"])).strftime("%H:%M:%S")
+            events.append(item)
+        return events
 
     def claim_webhook_event(self, event_id: str, occurred_at: str) -> bool:
         try:

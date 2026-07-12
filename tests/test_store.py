@@ -45,6 +45,18 @@ def test_stop_order_fields_survive_store_restart(tmp_path):
     assert loaded[0].stop_loss_order_quantity == 1.0
 
 
+def test_event_log_records_and_reads_back(tmp_path):
+    store = StateStore(tmp_path / "s.sqlite")
+    store.record_event("webhook", "AAPL", "open", 2, 110.0, 95.0, "OPENED", "opened", "e1")
+    store.record_event("webhook", "MSFT", "close", None, None, None, "CLOSED", "closed", "e2")
+    events = store.recent_events()
+    assert events[0]["symbol"] == "MSFT"  # newest first
+    assert events[1]["symbol"] == "AAPL"
+    assert events[1]["quantity"] == 2
+    assert events[1]["status"] == "OPENED"
+    assert "time" in events[0]
+
+
 def test_closed_position_is_not_loaded_as_open(tmp_path):
     store = StateStore(tmp_path / "state.sqlite")
     position = Position("AAPL", 1, 100.0)

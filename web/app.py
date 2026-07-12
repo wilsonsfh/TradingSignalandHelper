@@ -136,6 +136,13 @@ def create_app(
             }), 412
         return None
 
+    def _safe_record_event(source, symbol, action, quantity, tp, sl, status, message, event_id=None):
+        """Best-effort event-log write; telemetry must never break trading."""
+        try:
+            store.record_event(source, symbol, action, quantity, tp, sl, status, message, event_id)
+        except Exception:
+            pass
+
     @app.get("/")
     def index():
         return render_template(
@@ -184,6 +191,18 @@ def create_app(
         return jsonify({
             "positions": positions,
             "activity": activity,
+            "mode": cfg.mode_label,
+            "real_money": cfg.is_real_money,
+        })
+
+    @app.get("/api/events")
+    def api_events():
+        try:
+            events = store.recent_events()
+        except Exception as exc:
+            return jsonify({"status": "ERROR", "message": str(exc)}), 503
+        return jsonify({
+            "events": events,
             "mode": cfg.mode_label,
             "real_money": cfg.is_real_money,
         })
@@ -283,6 +302,14 @@ def create_app(
                 max_age_seconds=cfg.webhook_max_age_seconds,
             )
         except AlertError as exc:
+            _safe_record_event(
+                "webhook",
+                str(body.get("symbol", "?")).upper()[:12] or "?",
+                str(body.get("action", "?"))[:12],
+                None, None, None,
+                exc.label, str(exc),
+                (str(body.get("event_id") or "") or None),
+            )
             return jsonify({"status": exc.label, "message": str(exc)}), exc.status
 
         event_id = alert.event_id
@@ -297,6 +324,11 @@ def create_app(
         except Exception as exc:
             return jsonify({"status": "ERROR", "message": str(exc)}), 503
         if not claimed:
+            _safe_record_event(
+                "webhook", symbol, alert.action, alert.quantity,
+                alert.take_profit, alert.stop_loss,
+                "REPLAY", "event_id was already processed", event_id,
+            )
             return jsonify({"status": "REPLAY", "message": "event_id was already processed"}), 409
 
         # The alert (Pine script) is the brain: honor its tp/sl when present,
@@ -331,6 +363,10 @@ def create_app(
         payload = {"status": result["status"], "message": result["message"]}
         if result.get("position"):
             payload["position"] = _position_dict(result["position"])
+        _safe_record_event(
+            "webhook", symbol, alert.action, alert.quantity,
+            take_profit, stop_loss, result["status"], result["message"], event_id,
+        )
         if result["status"] == "ERROR":
             try:
                 store.release_webhook_event(event_id)
