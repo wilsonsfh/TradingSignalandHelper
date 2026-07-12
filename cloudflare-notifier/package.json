@@ -1,0 +1,17 @@
+{
+  "name": "signal-notifier",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TradingView -> Telegram signal notifier on Cloudflare Workers (front for TradingSignalandHelper).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260701.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^3.90.0"
+  }
+}

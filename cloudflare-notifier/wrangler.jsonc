@@ -1,0 +1,27 @@
+{
+  // Cloudflare Worker: TradingView webhook -> Telegram notifier (always-on edge front).
+  // Deployed under the wilsonsfh account via Wrangler, the same way danes-musings is.
+  // This Worker does NOT trade. Live moomoo/OpenD execution runs on a persistent host
+  // (local Mac, a VM, or a Zo Computer) — Workers cannot run OpenD or a long-lived process.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "signal-notifier",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "observability": { "enabled": true },
+
+  // Recent alert events are stored here (create with: wrangler kv namespace create EVENTS).
+  "kv_namespaces": [
+    { "binding": "EVENTS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+
+  // Non-secret config. Secrets (WEBHOOK_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
+  // are set with `wrangler secret put <NAME>` and never committed.
+  "vars": {
+    // Empty = no IP allow-list at the Worker (rely on the shared secret / Cloudflare WAF).
+    // TradingView's published webhook IPs, if you choose to enforce them here:
+    // 52.89.214.238,34.212.75.30,54.218.53.128,52.32.178.7
+    "TRADINGVIEW_IP_ALLOWLIST": "",
+    "MAX_ALERT_QUANTITY": "100",
+    "WEBHOOK_MAX_AGE_SECONDS": "300"
+  }
+}

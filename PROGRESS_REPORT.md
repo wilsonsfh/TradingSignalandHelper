@@ -16,6 +16,15 @@
 
 ## Completed
 
+- **2026-07-12 — Cloudflare Telegram notifier scaffolded (deploy pending owner auth).**
+  `cloudflare-notifier/` is a Worker (Wrangler, wilsonsfh account — same model as
+  danes-musings) that receives TradingView webhooks, logs them to KV, serves a small
+  Access-protected dashboard, and pushes **Telegram** alerts, honoring the alert's
+  tp/sl/quantity. It does **not** trade (Workers can't run OpenD); live moomoo execution
+  stays on a persistent host — local + Cloudflare Tunnel, a VM (à la Curteis), or a Zo
+  Computer. Deploy needs `wrangler login` + a Telegram bot + secrets (owner browser auth).
+  Code only; no secrets committed.
+
 - **2026-07-12 — Event-driven TradingView → moomoo bridge.** Reframed the app around
   Curteis Yang's "Pine is the brain, the bridge is dumb" model on branch
   `feature/event-driven-tradingview-bridge`: a validating alert parser that honors
