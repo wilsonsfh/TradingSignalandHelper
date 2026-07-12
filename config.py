@@ -47,6 +47,11 @@ class Config:
     )
     opend_host: str = field(default_factory=lambda: os.getenv("OPEND_HOST", "127.0.0.1"))
     opend_port: int = field(default_factory=lambda: int(os.getenv("OPEND_PORT", "11111")))
+    # moomoo brokerage entity — MUST match your account or OpenD returns no accounts.
+    # FUTUSECURITIES=FUTU HK, FUTUINC=moomoo US, FUTUSG=moomoo SG, FUTUAU/CA/JP/MY.
+    moomoo_security_firm: str = field(
+        default_factory=lambda: os.getenv("MOOMOO_SECURITY_FIRM", "FUTUSECURITIES").upper()
+    )
     webhook_secret: str = field(default_factory=lambda: os.getenv("WEBHOOK_SECRET", "change-me"))
     webhook_enabled: bool = field(default_factory=lambda: _env_bool("WEBHOOK_ENABLED"))
     webhook_max_age_seconds: int = field(
@@ -107,6 +112,9 @@ class Config:
             raise ValueError("DATA_SOURCE must be 'demo' or 'yfinance'")
         if self.broker == "moomoo" and self.data_source != "yfinance":
             raise ValueError("BROKER=moomoo requires DATA_SOURCE=yfinance")
+        known_firms = {"FUTUSECURITIES", "FUTUINC", "FUTUSG", "FUTUAU", "FUTUCA", "FUTUJP", "FUTUMY"}
+        if self.moomoo_security_firm not in known_firms:
+            raise ValueError(f"MOOMOO_SECURITY_FIRM must be one of {sorted(known_firms)}")
         if self.quantity <= 0 or self.soft_stop_poll_seconds <= 0:
             raise ValueError("QUANTITY and SOFT_STOP_POLL_SECONDS must be positive")
         if self.max_alert_quantity <= 0:

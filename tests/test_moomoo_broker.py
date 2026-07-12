@@ -149,6 +149,10 @@ class FakeQuoteContext:
 class FakeSDK:
     RET_OK = 0
     TrdMarket = SimpleNamespace(US="US")
+    SecurityFirm = SimpleNamespace(
+        FUTUSECURITIES="FUTUSECURITIES", FUTUINC="FUTUINC", FUTUSG="FUTUSG",
+        FUTUAU="FUTUAU", FUTUCA="FUTUCA", FUTUJP="FUTUJP", FUTUMY="FUTUMY",
+    )
     TrdEnv = SimpleNamespace(SIMULATE="SIMULATE", REAL="REAL")
     TrdSide = SimpleNamespace(BUY="BUY", SELL="SELL")
     OrderType = SimpleNamespace(MARKET="MARKET", NORMAL="NORMAL", STOP="STOP")
@@ -214,7 +218,10 @@ def test_trading_methods_require_connection():
 
 def test_connect_uses_exact_context_arguments():
     broker, sdk = connected_broker()
-    assert sdk.trade_args == {"filter_trdmarket": "US", "host": "127.0.0.1", "port": 11111}
+    assert sdk.trade_args == {
+        "filter_trdmarket": "US", "host": "127.0.0.1", "port": 11111,
+        "security_firm": "FUTUSECURITIES",
+    }
     assert sdk.quote_args == {"host": "127.0.0.1", "port": 11111}
     assert broker._env() == "SIMULATE"
 
@@ -700,3 +707,16 @@ def test_missing_stop_order_id_quarantines_position():
     with pytest.raises(RuntimeError, match="manual reconciliation"):
         broker.place_bracket(bracket())
     assert broker.open_positions()[0].status == "OPEN_PROTECTION_UNKNOWN"
+
+
+def test_connect_passes_configured_security_firm():
+    """moomoo SG (and other entities) must target the right security_firm."""
+    sdk = FakeSDK()
+    MoomooBroker(sdk=sdk, security_firm="FUTUSG").connect()
+    assert sdk.trade_args["security_firm"] == "FUTUSG"
+
+
+def test_connect_defaults_to_futusecurities():
+    sdk = FakeSDK()
+    MoomooBroker(sdk=sdk).connect()
+    assert sdk.trade_args["security_firm"] == "FUTUSECURITIES"

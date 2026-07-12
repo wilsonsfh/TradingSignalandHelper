@@ -16,6 +16,17 @@
 
 ## Completed
 
+- **2026-07-12 — moomoo entity is configurable + OpenD connectivity probe.** Discovered
+  during setup that `MoomooBroker.connect()` never passed `security_firm`, so the SDK
+  defaulted to FUTU HK — a **moomoo SG** (or US/AU/…) account would list zero accounts and
+  never trade. Added `MOOMOO_SECURITY_FIRM` (config + `.env.example`, default
+  `FUTUSECURITIES`; validated against the known entity set) and threaded it through
+  `build_broker` → `MoomooBroker.connect()`. Added `scripts/check_opend.py`, a read-only
+  one-command probe (TCP pre-flight so it fails fast, lists accounts, flags whether a
+  SIMULATE/paper account exists) — no orders. Installed `moomoo-api==10.08.6808` into the
+  venv. TDD: 4 new tests + updated the exact-args contract test; **234 tests green**.
+  Branch `feature/event-driven-tradingview-bridge`.
+
 - **2026-07-12 — Credentials & setup guide (`docs/SETUP.md`).** Phased, checkpointed
   hand-holding for the owner-provided accounts/tools: **Phase A** (moomoo account + OpenD
   + SDK → first paper trade from the dashboard, no TradingView/Cloudflare) and **Phase B**

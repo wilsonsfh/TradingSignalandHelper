@@ -30,10 +30,10 @@ Nothing here is committed as a secret. The app never stores your moomoo password
 
 ```bash
 cd /Users/wsoon/Projects/TradingSignalandHelper
-.venv/bin/python -m pytest -q          # sanity: should say "228 passed"
-.venv/bin/pip install -r requirements-moomoo.txt   # adds moomoo-api==10.8.6808
+.venv/bin/python -m pytest -q          # sanity: should say "234 passed"
+.venv/bin/pip install -r requirements-moomoo.txt   # moomoo-api==10.8.6808 (already installed this session)
 ```
-✅ Done when `pytest` is green and `pip show moomoo-api` prints version 10.8.6808.
+✅ Done when `pytest` is green and `.venv/bin/pip show moomoo-api` prints version 10.08.6808.
 
 ---
 
@@ -55,27 +55,26 @@ cd /Users/wsoon/Projects/TradingSignalandHelper
 Copy `.env.example` → `.env` and set:
 ```dotenv
 BROKER=moomoo
-TRD_ENV=SIMULATE          # paper account
-DATA_SOURCE=yfinance      # required with moomoo
+TRD_ENV=SIMULATE            # paper account
+DATA_SOURCE=yfinance        # required with moomoo
 OPEND_HOST=127.0.0.1
 OPEND_PORT=11111
+MOOMOO_SECURITY_FIRM=FUTUSG # ← moomoo SG. (US=FUTUINC, HK=FUTUSECURITIES, AU=FUTUAU, …)
 # leave WEBHOOK_ENABLED unset/false for Phase A
 ```
+> **Why `MOOMOO_SECURITY_FIRM` matters:** the SDK defaults to FUTU HK. On a **moomoo SG**
+> account you MUST set `FUTUSG` or OpenD lists zero accounts and nothing trades.
 
 ### A4 · verify the connection, then trade
-Quick connectivity probe (read-only — lists your accounts, places no orders):
+Run the read-only probe (uses your `.env`; lists accounts, places no orders):
 ```bash
-.venv/bin/python - <<'PY'
-from moomoo import OpenSecTradeContext, TrdMarket, SecurityFirm, RET_OK
-ctx = OpenSecTradeContext(filter_trdmarket=TrdMarket.US, host="127.0.0.1", port=11111,
-                          security_firm=SecurityFirm.FUTUSECURITIES)  # match your entity
-ret, data = ctx.get_acc_list()
-print("OK" if ret == RET_OK else "FAIL", data)
-ctx.close()
-PY
+.venv/bin/python scripts/check_opend.py
 ```
-- `OK` + a table that includes a `SIMULATE` account → OpenD + SDK are wired. 🎉
-- `FAIL`/connection refused → OpenD isn't running or the port is wrong. Wrong `security_firm` → set it to your entity (e.g. `FUTUSECURITIES`, `FUTUINC`, `FUTUSG`, `FUTUAU`); tell me your region and I'll give the exact one.
+- Before OpenD is up you'll see: `FAIL · nothing listening at 127.0.0.1:11111` — expected.
+- With OpenD running + logged in: `OK · connected` + an account table, and
+  `OK · a SIMULATE (paper) account is available`. 🎉
+- `get_acc_list error` / no SIMULATE account → your `MOOMOO_SECURITY_FIRM` may not match
+  your entity, or Paper Trading isn't enabled in the moomoo app. Paste the output to me.
 
 Then place a **paper trade from the dashboard** (no webhook needed):
 ```bash
@@ -113,20 +112,23 @@ cloudflared tunnel --url http://127.0.0.1:5000     # prints an https://…tryclo
 Free and ephemeral — the URL **changes each restart** (update the alert if you restart it).
 TradingView only accepts **ports 80/443**, so you must use this HTTPS URL, never `:5000`.
 
-### B3 · TradingView alert  ⚠️ needs a **paid plan + 2FA**
-Webhook alerts require a paid TradingView plan (Essential or higher) **and** 2FA enabled on
-your account — free plans can't send webhooks. Then:
-1. Enable 2FA (Settings → Privacy & security).
-2. Create an alert → **Notifications → Webhook URL** = `<tunnel-url>/webhook`.
-3. **Message** = JSON (this is the "brain"; include the secret as `key`):
-   ```json
-   {"event_id":"{{timenow}}","timestamp":"{{timenow}}","action":"open","side":"buy","symbol":"{{ticker}}","quantity":1,"tp":183.0,"sl":172.0,"key":"<WEBHOOK_SECRET>"}
-   ```
-4. Trigger it (or wait for the condition). It should hit `/webhook` and open a paper position;
-   watch the **Incoming alerts** panel in the dashboard.
+### B3 · test the webhook WITHOUT TradingView first (you have no TV account yet)
+You don't need TradingView to prove the webhook path — send the alert yourself with `curl`
+(swap in your tunnel URL + secret). This is the whole point of the event-driven design:
+```bash
+curl -X POST https://<your-tunnel>.trycloudflare.com/webhook \
+  -H 'Content-Type: application/json' \
+  -d '{"event_id":"test-1","timestamp":"'"$(date -u +%FT%TZ)"'","action":"open","side":"buy","symbol":"AAPL","quantity":1,"tp":235.0,"sl":225.0,"key":"<WEBHOOK_SECRET>"}'
+```
+A paper position should open and appear in the dashboard's **Incoming alerts** panel. (Use a
+symbol in your `WATCHLIST`.) Re-sending the same `event_id` returns `409 REPLAY` — by design.
 
-Only these TradingView IPs send the POST (optional to allowlist via `WEBHOOK_IP_ALLOWLIST`):
-`52.89.214.238, 34.212.75.30, 54.218.53.128, 52.32.178.7`.
+### B3b · (later) the real TradingView alert  ⚠️ needs a **paid plan + 2FA**
+When you decide to sign up: webhook alerts require a **paid** TradingView plan (Essential+)
+**and** 2FA. Then create an alert → **Notifications → Webhook URL** = `<tunnel-url>/webhook`,
+with the same JSON as the curl body above but using TradingView placeholders, e.g.
+`"symbol":"{{ticker}}"`. Only these TradingView IPs send the POST (optionally allowlist via
+`WEBHOOK_IP_ALLOWLIST`): `52.89.214.238, 34.212.75.30, 54.218.53.128, 52.32.178.7`.
 
 ### B4 · Telegram notifications (optional)
 1. Message **@BotFather** → `/newbot` → copy the **token**.

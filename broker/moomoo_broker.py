@@ -51,6 +51,7 @@ class MoomooBroker(Broker):
         sdk: Any = None,
         use_broker_stop_order: bool = False,
         initial_positions: Optional[Iterable[Position]] = None,
+        security_firm: str = "FUTUSECURITIES",
     ) -> None:
         environment = trd_env.upper()
         if environment not in {"SIMULATE", "REAL"}:
@@ -61,6 +62,7 @@ class MoomooBroker(Broker):
         self.port = port
         self.trd_env = environment
         self.market = market.upper()
+        self.security_firm = security_firm.upper()
         self._trade_password = trade_password
         self._use_broker_stop_order = use_broker_stop_order
         self._sdk = sdk
@@ -76,11 +78,15 @@ class MoomooBroker(Broker):
                 raise RuntimeError(f"{_NOT_CONNECTED}\n(import error: {exc})") from exc
             self._sdk = sdk
         market = self._sdk.TrdMarket.US
-        self._ctx = self._sdk.OpenSecTradeContext(
-            filter_trdmarket=market,
-            host=self.host,
-            port=self.port,
-        )
+        ctx_kwargs = {"filter_trdmarket": market, "host": self.host, "port": self.port}
+        # Target the account's brokerage entity (e.g. FUTUSG for moomoo SG); without
+        # this the SDK defaults to FUTU HK and a non-HK account lists no accounts.
+        firms = getattr(self._sdk, "SecurityFirm", None)
+        if firms is not None:
+            firm = getattr(firms, self.security_firm, None)
+            if firm is not None:
+                ctx_kwargs["security_firm"] = firm
+        self._ctx = self._sdk.OpenSecTradeContext(**ctx_kwargs)
         try:
             self._quote = self._sdk.OpenQuoteContext(host=self.host, port=self.port)
         except Exception:

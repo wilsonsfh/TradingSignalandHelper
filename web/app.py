@@ -59,6 +59,7 @@ def build_broker(
             trd_env=cfg.trd_env,
             use_broker_stop_order=cfg.use_broker_stop_order,
             initial_positions=initial_positions,
+            security_firm=cfg.moomoo_security_firm,
         )
     return MockBroker(initial_positions)
 

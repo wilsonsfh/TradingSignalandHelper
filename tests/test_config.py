@@ -121,3 +121,17 @@ def test_negative_max_daily_loss_fails_closed():
     cfg.max_daily_loss = -1.0
     with pytest.raises(ValueError, match="MAX_DAILY_LOSS"):
         cfg.validate()
+
+
+def test_moomoo_security_firm_default(monkeypatch):
+    monkeypatch.delenv("MOOMOO_SECURITY_FIRM", raising=False)
+    assert Config().moomoo_security_firm == "FUTUSECURITIES"
+
+
+def test_invalid_moomoo_security_firm_fails_closed():
+    cfg = Config()
+    cfg.broker = "moomoo"
+    cfg.data_source = "yfinance"
+    cfg.moomoo_security_firm = "NOPE"
+    with pytest.raises(ValueError, match="MOOMOO_SECURITY_FIRM"):
+        cfg.validate()
