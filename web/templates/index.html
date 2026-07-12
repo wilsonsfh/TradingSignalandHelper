@@ -23,13 +23,22 @@
     </a>
     <div class="environment" aria-label="Trading environment">
       {% if real_money %}
-      <span class="mode-pill mode-live"><span aria-hidden="true">●</span> Live · {{ mode }}</span>
+      <span class="mode-pill mode-live"><span class="live-dot" aria-hidden="true">●</span> Live · {{ mode }}</span>
       {% else %}
       <span class="mode-pill mode-paper"><span aria-hidden="true">●</span> Paper · {{ mode }}</span>
       {% endif %}
       <span class="refresh-status" id="lastUpdated" aria-live="polite">Connecting…</span>
     </div>
   </header>
+
+  {% if real_money %}
+  <div class="armed-banner" role="status" aria-label="Real-money mode armed">
+    <span class="armed-beacon" aria-hidden="true"></span>
+    <strong>LIVE MONEY ARMED</strong>
+    <span class="armed-sub">· real broker orders will execute</span>
+    <span class="armed-caps">{{ armed_caps }}</span>
+  </div>
+  {% endif %}
 
   <main id="main" class="layout">
     <header class="workspace-intro">

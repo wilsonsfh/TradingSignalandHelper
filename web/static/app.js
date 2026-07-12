@@ -2,6 +2,11 @@
 
 const REAL_MONEY = document.documentElement.dataset.realMoney === "true";
 const ORDER_QUANTITY = Number(document.documentElement.dataset.quantity || 1);
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const prefersReducedMotion = () => reduceMotion.matches;
+// Row-entrance motion runs on the FIRST populate of each list only — never on the
+// 4s silent refresh, which would strobe (Apple: high-frequency motion is noise).
+const firstRender = { signals: true, positions: true, events: true };
 let latestPositionsBySymbol = new Map();
 let signalRequestVersion = 0;
 let stateRequestVersion = 0;
@@ -166,12 +171,24 @@ function openConfirm({ title, sub, rows, confirmLabel, confirmClass, onConfirm, 
   confirmButton.textContent = confirmLabel || "Confirm";
   confirmButton.className = `btn ${confirmClass || ""}`.trim();
   pendingConfirm = onConfirm;
+  orderDialog.classList.remove("is-closing");
+  orderDialog.classList.toggle("is-live", REAL_MONEY);
   orderDialog.showModal();
   confirmButton.focus();
 }
 
 function closeConfirm() {
-  if (orderDialog.open) orderDialog.close();
+  if (!orderDialog.open) return;
+  // Mirror the enter path on exit (Apple: symmetric materialize), unless reduced motion.
+  if (prefersReducedMotion()) {
+    orderDialog.close();
+    return;
+  }
+  orderDialog.classList.add("is-closing");
+  window.setTimeout(() => {
+    orderDialog.classList.remove("is-closing");
+    orderDialog.close();
+  }, 170);
 }
 
 function restoreDialogFocus(element, label) {
@@ -215,6 +232,18 @@ function emptyState(title, detail) {
   return item;
 }
 
+// Stagger a spring rise on the first populate of a list; no-op afterwards and
+// under reduced motion. Called only from the content path (never for empty state).
+function enterRows(listEl, key) {
+  if (!firstRender[key]) return;
+  firstRender[key] = false;
+  if (prefersReducedMotion()) return;
+  const rows = listEl.children;
+  for (let i = 0; i < rows.length; i += 1) rows[i].style.setProperty("--i", i);
+  listEl.classList.add("is-entering");
+  window.setTimeout(() => listEl.classList.remove("is-entering"), 700);
+}
+
 function renderSignals(signals) {
   const list = $("#signalList");
   const focusedControlLabel = document.activeElement?.getAttribute?.("aria-label") || null;
@@ -256,6 +285,7 @@ function renderSignals(signals) {
   });
 
   $("#statSignals").textContent = String(actionable);
+  enterRows(list, "signals");
   if (focusedControlLabel) {
     const replacement = Array.from(list.querySelectorAll("[aria-label]")).find(
       (element) => element.getAttribute("aria-label") === focusedControlLabel,
@@ -421,6 +451,7 @@ function renderPositions(positions) {
   const pnl = $("#statPnl");
   pnl.textContent = money(totalPnl);
   pnl.className = `summary-value ${totalPnl >= 0 ? "text-up" : "text-down"}`;
+  enterRows(list, "positions");
 }
 
 function confirmPositionAction(position, presentation, trigger) {
@@ -515,6 +546,7 @@ function renderEvents(events) {
     );
     list.appendChild(item);
   });
+  enterRows(list, "events");
 }
 
 function positionLegs(position) {

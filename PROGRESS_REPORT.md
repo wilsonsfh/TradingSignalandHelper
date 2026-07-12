@@ -16,6 +16,25 @@
 
 ## Completed
 
+- **2026-07-12 — Dashboard revamp: obvious REAL-money trigger + Apple-style motion.**
+  Made REAL mode unmistakable and added purposeful motion, conforming to the existing
+  dark token system (no new stack; not a Kumo/CF app). **Obvious trigger:** a sticky
+  crimson **"LIVE MONEY ARMED"** banner that also surfaces the live circuit-breaker
+  caps (`cap $… · daily-stop $… · RTH · webhook armed`, built in `web/app.py:index`),
+  a persistent inset red viewport frame (`body[data-real-money="true"]::after`), a
+  blinking live pill dot, and a **red "LIVE MONEY" confirm ticket** — buy/sell buttons
+  stay semantic green/red (direction), danger comes from frame+kicker+warning.
+  **Motion (Apple):** the confirm `<dialog>` **materializes** (opacity+scale+blur on a
+  spring) and mirrors on exit (`is-closing`); list rows **rise staggered on first paint
+  only** (guarded so the 4s refresh never strobes); beacon/dot breathe. All collapse to
+  a cross-fade under `prefers-reduced-motion`, plus a `prefers-reduced-transparency`
+  fallback; state clarity (banner/frame) is kept, not animated. TDD for the banner
+  (2 tests); **228 tests green**, `node --check` + compile clean; verified live in a
+  REAL-mode preview (banner, caps, frame, red ticket all render). Rejected a PAPER⇄LIVE
+  UI toggle (mode is env-set; a fake switch misleads, a real one is a footgun). Files:
+  `web/templates/index.html`, `web/static/styles.css`, `web/static/app.js`, `web/app.py`.
+  Branch `feature/event-driven-tradingview-bridge`.
+
 - **2026-07-12 — REAL-money enablement gate (Step 2 code; ships OFF).** Built the
   safety layer that makes flipping REAL on *safe*, all default-off and proven offline
   (**226 tests**, TDD). New `trader/safety.py` `evaluate_real(...)` enforces a double

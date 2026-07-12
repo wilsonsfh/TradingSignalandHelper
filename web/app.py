@@ -159,12 +159,23 @@ def create_app(
         except Exception:
             pass
 
+    def _armed_caps() -> str:
+        """One-line summary of the live circuit-breaker state for the REAL banner."""
+        parts = [
+            f"cap ${cfg.max_notional:,.0f}" if cfg.max_notional > 0 else "no notional cap",
+            f"daily-stop ${cfg.max_daily_loss:,.0f}" if cfg.max_daily_loss > 0 else "no daily stop",
+            "RTH" if cfg.enforce_market_hours else "24h",
+            "webhook armed" if cfg.allow_real_webhook else "webhook OFF",
+        ]
+        return " · ".join(parts)
+
     @app.get("/")
     def index():
         return render_template(
             "index.html",
             mode=cfg.mode_label,
             real_money=cfg.is_real_money,
+            armed_caps=_armed_caps(),
             watchlist=cfg.watchlist,
             quantity=cfg.quantity,
             ema_fast=cfg.ema_fast,

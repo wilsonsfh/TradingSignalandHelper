@@ -34,11 +34,14 @@
   --warn-soft: #302718;
   --danger: #ff8994;
   --danger-soft: #351b20;
+  --live: #ff5468;
+  --live-ink: #2a0a0f;
   --radius-sm: 6px;
   --radius: 10px;
   --radius-pill: 999px;
   --ring: 0 0 0 3px rgba(88, 215, 192, .4);
   --ease-out: cubic-bezier(.23, 1, .32, 1);
+  --spring: cubic-bezier(.32, .72, 0, 1);
   --z-sticky: 20;
   --z-dialog: 40;
   --z-toast: 50;
@@ -324,9 +327,17 @@ h1, h2 { line-height: var(--leading-tight); text-wrap: balance; }
   padding: var(--space-6);
   box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
 }
-.order-dialog[open] { animation: dialog-enter 180ms var(--ease-out); }
-.order-dialog::backdrop { background: rgba(3, 5, 8, .76); backdrop-filter: blur(2px); }
-@keyframes dialog-enter { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+/* Apple-style materialize: opacity + scale + blur settle together on a spring;
+   exit mirrors the path (see .is-closing, toggled in JS before dialog.close()). */
+.order-dialog[open] { animation: sheet-in 260ms var(--spring); }
+.order-dialog.is-closing { animation: sheet-out 170ms var(--ease-out) forwards; }
+.order-dialog::backdrop { background: rgba(3, 5, 8, .76); backdrop-filter: blur(2px); animation: backdrop-in 220ms ease; }
+@keyframes sheet-in { from { opacity: 0; transform: scale(.94); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes sheet-out { from { opacity: 1; transform: none; filter: none; } to { opacity: 0; transform: scale(.97); filter: blur(4px); } }
+@keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+/* Live-money ticket wears danger: red frame, red kicker, deeper shadow. */
+.order-dialog.is-live { border-color: var(--live); box-shadow: 0 12px 40px rgba(255, 84, 104, .24); }
+.order-dialog.is-live .section-label { color: var(--live); }
 .dialog-head { display: flex; align-items: start; justify-content: space-between; gap: var(--space-4); }
 .dialog-head h2 { margin-top: 2px; font-size: var(--text-xl); }
 .dialog-copy { margin-top: var(--space-2); color: var(--muted); font-size: var(--text-sm); }
@@ -342,6 +353,58 @@ h1, h2 { line-height: var(--leading-tight); text-wrap: balance; }
 .toast.warn { border-color: #755c2e; }
 .toast.err { border-color: #7d3540; }
 .toast.is-leaving { opacity: 0; transform: translateY(6px); }
+
+/* ── REAL-money armed state: the unmistakable trigger ── */
+.armed-banner {
+  position: sticky;
+  top: 64px;
+  z-index: calc(var(--z-sticky) - 1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border-bottom: 1px solid #7d3540;
+  background: linear-gradient(90deg, #2a0a0f, #3a0d14);
+  color: #ffd7dc;
+  padding: var(--space-2) max(var(--space-6), calc((100vw - 1180px) / 2));
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+.armed-banner strong { letter-spacing: .04em; }
+.armed-sub { color: #ffb3bc; font-weight: 600; }
+.armed-caps { margin-left: auto; color: #ffb3bc; font-weight: 600; font-variant-numeric: tabular-nums; }
+.armed-beacon {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--live);
+  box-shadow: 0 0 0 0 rgba(255, 84, 104, .55);
+  animation: armed-beacon 2.4s var(--ease-out) infinite;
+}
+@keyframes armed-beacon { 70% { box-shadow: 0 0 0 10px rgba(255, 84, 104, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 84, 104, 0); } }
+.live-dot { animation: live-blink 1.6s steps(1, end) infinite; }
+@keyframes live-blink { 50% { opacity: .35; } }
+/* A persistent inset frame on the viewport keeps peripheral "you are live" awareness. */
+body[data-real-money="true"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-toast) - 1);
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--live), inset 0 0 26px rgba(255, 84, 104, .12);
+}
+
+/* First-paint row entrance (spring rise, staggered). JS adds .is-entering ONLY on
+   the first populate of a list, never on the 4s silent refresh (avoids strobing). */
+.is-entering > .signal-row,
+.is-entering > .position-row,
+.is-entering > .event-item {
+  animation: row-in .42s var(--spring) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+@keyframes row-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 @media (hover: hover) and (pointer: fine) {
   .signal-row:hover, .position-row:hover { background-color: var(--surface-hover); }
@@ -396,4 +459,13 @@ h1, h2 { line-height: var(--leading-tight); text-wrap: balance; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .btn:active, .icon-button:active, .toast, .toast.is-leaving, .order-dialog[open] { transform: none; }
+  /* Motion off, but state clarity stays: banner, frame, and a static live dot remain. */
+  .armed-beacon, .live-dot { animation: none; }
+  .order-dialog[open], .order-dialog.is-closing { animation: none; opacity: 1; transform: none; filter: none; }
+  .is-entering > .signal-row, .is-entering > .position-row, .is-entering > .event-item { animation: none; opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .topbar { background: var(--bg); backdrop-filter: none; }
+  .order-dialog::backdrop { backdrop-filter: none; }
 }

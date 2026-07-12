@@ -726,3 +726,27 @@ def test_webhook_real_close_allowed_with_confirm():
     r = client.post("/webhook", json=_alert(event_id="c", action="close", confirm=True))
     assert r.get_json()["status"] == "CLOSED"
     assert broker.open_positions() == []
+
+
+# ───────── REAL-money armed banner (obvious trigger) ─────────
+
+def test_real_index_shows_armed_banner():
+    feed = FakeFeed({"UP": [10, 10, 10, 10, 10, 10, 12]})
+    cfg = _cfg(["UP"])
+    cfg.broker = "moomoo"
+    cfg.trd_env = "REAL"
+    cfg.data_source = "yfinance"
+    cfg.max_notional = 2000.0
+    cfg.max_daily_loss = 500.0
+    app = create_app(config=cfg, feed=feed, broker=MockBroker())
+    html = app.test_client().get("/").get_data(as_text=True)
+    assert 'class="armed-banner"' in html
+    assert "LIVE MONEY ARMED" in html
+    assert "$2,000" in html and "$500" in html   # live caps shown in the banner
+
+
+def test_paper_index_hides_armed_banner():
+    app, _ = _app()
+    html = app.test_client().get("/").get_data(as_text=True)
+    assert "armed-banner" not in html
+    assert "LIVE MONEY ARMED" not in html
