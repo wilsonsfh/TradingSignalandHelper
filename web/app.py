@@ -145,6 +145,13 @@ def create_app(
             }), 412
         return None
 
+    def _start_of_day_utc() -> str:
+        return (
+            datetime.now(timezone.utc)
+            .replace(hour=0, minute=0, second=0, microsecond=0)
+            .isoformat()
+        )
+
     def _safe_record_event(source, symbol, action, quantity, tp, sl, status, message, event_id=None):
         """Best-effort event-log write; telemetry must never break trading."""
         try:
@@ -312,10 +319,10 @@ def create_app(
         supplied_key = str(body.get("key", ""))
         if not hmac.compare_digest(supplied_key, cfg.webhook_secret):
             return jsonify({"status": "UNAUTHORIZED", "message": "bad or missing key"}), 401
-        if cfg.is_real_money:
+        if cfg.is_real_money and not cfg.allow_real_webhook:
             return jsonify({
                 "status": "DISABLED",
-                "message": "webhook auto-trading is disabled in REAL-money mode",
+                "message": "webhook auto-trading is disabled in REAL-money mode (set ALLOW_REAL_WEBHOOK=true)",
             }), 403
 
         try:
@@ -343,6 +350,37 @@ def create_app(
             price = float(feed.last_price(symbol))
         except Exception as exc:
             return jsonify({"status": "ERROR", "message": f"no price available: {exc}"}), 503
+
+        # REAL-money gate: double opt-in + circuit breakers + market hours.
+        # SIMULATE/mock never reach this branch. Runs before claiming the event
+        # so a rejected alert can be corrected and re-sent with the same id.
+        if cfg.is_real_money:
+            from trader.safety import evaluate_real
+
+            try:
+                pnl_today = store.realized_pnl_since(_start_of_day_utc())
+            except Exception as exc:
+                return jsonify({"status": "ERROR", "message": f"risk check unavailable: {exc}"}), 503
+            decision = evaluate_real(
+                action=alert.action,
+                allow_real_webhook=cfg.allow_real_webhook,
+                confirm=body.get("confirm"),
+                price=price,
+                quantity=alert.quantity or cfg.quantity,
+                max_notional=cfg.max_notional,
+                max_daily_loss=cfg.max_daily_loss,
+                realized_pnl_today=pnl_today,
+                now_utc=datetime.now(timezone.utc),
+                enforce_market_hours=cfg.enforce_market_hours,
+            )
+            if not decision.ok:
+                _safe_record_event(
+                    "webhook", symbol, alert.action, alert.quantity,
+                    None, None, decision.label, decision.message, event_id,
+                )
+                code = 412 if decision.label == "CONFIRM_REQUIRED" else 403
+                return jsonify({"status": decision.label, "message": decision.message}), code
+
         try:
             claimed = store.claim_webhook_event(event_id, alert.occurred_at.isoformat())
         except Exception as exc:

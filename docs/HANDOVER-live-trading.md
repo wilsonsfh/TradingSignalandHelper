@@ -86,33 +86,38 @@ Gotchas: keep OpenD + bridge + tunnel all running during US market hours; the qu
 changes each restart (update the TradingView URL if you restart it). Trades only run while this
 host is on — for always-on, host Layer 2 on a VM or Zo Computer.
 
-## 4. STEP 2 — enable REAL money (code to BUILD next session, then you flip it on)
+## 4. STEP 2 — enable REAL money (gate BUILT & off by default; two follow-ups + your flip)
 
 Do this only after Step 1's paper smoke passes. Design spec:
 `docs/superpowers/specs/2026-07-12-real-mode-enablement.md`.
 
-**What a future session must build (ships OFF by default; owner flips it):**
+**Already built and unit-tested (ships OFF; you flip it):**
 
-1. `config.py`: add `allow_real_webhook` (env `ALLOW_REAL_WEBHOOK`, default **False**),
-   `max_notional` (env `MAX_NOTIONAL`, per-order cap), `max_daily_loss` (env `MAX_DAILY_LOSS`,
-   kill-switch). Validate positivity.
-2. `web/app.py` webhook (the block at **`web/app.py:315`**): replace the hard
-   `if cfg.is_real_money: return 403` with:
-   - if `is_real_money and not cfg.allow_real_webhook` → still `403` (blocked);
-   - if allowed → require `body.get("confirm") is True` (like the dashboard REAL gate at `:141`);
-   - enforce `price * quantity <= max_notional`.
-3. `state/store.py`: track realized P&L per UTC day; expose a helper the runtime checks.
-4. `trader/runtime.py`: before opening in REAL, enforce the daily-loss kill-switch, market-hours,
-   and stale-quote guards; refuse and Telegram-alert when tripped.
-5. Startup reconciliation: on boot in REAL, compare local SQLite state against the broker's real
-   open orders/positions; refuse to trade on divergence until resolved.
-6. Tests: REAL gate (blocked unless `ALLOW_REAL_WEBHOOK` + `confirm:true`), notional cap, daily-loss
-   kill-switch — all via the fake SDK, no live account.
+1. `config.py`: `allow_real_webhook` (`ALLOW_REAL_WEBHOOK`, default **False**), `max_notional`
+   (`MAX_NOTIONAL`, per-order cap), `max_daily_loss` (`MAX_DAILY_LOSS`, kill-switch),
+   `enforce_market_hours` (`ENFORCE_MARKET_HOURS`, default True). Validated.
+2. `trader/safety.py` — pure `evaluate_real(...)` gate + `within_regular_hours(...)`: double opt-in
+   (flag + literal `confirm:true`), notional cap, daily-loss kill-switch, US-RTH fence for opens
+   (closing always allowed). 20 unit tests.
+3. `state/store.py: realized_pnl_since(start_iso)` — feeds the kill-switch (long-only realized P&L).
+4. `web/app.py` `/webhook`: REAL stays hard-blocked unless `ALLOW_REAL_WEBHOOK=true`; when opted in
+   it runs `evaluate_real` **before** claiming the event (rejections are re-sendable), records the
+   decision to the event log, and returns 412 `CONFIRM_REQUIRED` / 403 `NOTIONAL_EXCEEDED` /
+   `KILL_SWITCH` / `MARKET_CLOSED` / `DISABLED`. 7 web tests.
 
-**What you (owner) do to actually go live, after the code exists:**
+**Still REQUIRED before real capital (not yet built — need the live moomoo API surface / a corpus):**
+
+5. **Startup reconciliation** — on boot in REAL, compare local SQLite state against the broker's
+   real open orders/positions and refuse to trade on divergence. (Needs the live moomoo order-query
+   surface; only mockable today.)
+6. **Dry-run replay** — replay a recorded SIMULATE event corpus through the REAL path with a mocked
+   broker and confirm identical decisions.
+7. **Human checkpoint** — your explicit sign-off; enabling REAL is irreversible-risk.
+
+**What you (owner) do to actually go live, after 5–7 are satisfied:**
 - Fund a **real** moomoo account; in OpenD log into it.
 - `.env`: `TRD_ENV=REAL`, `ALLOW_REAL_WEBHOOK=true`, set small `MAX_NOTIONAL` and `MAX_DAILY_LOSS`,
-  keep `confirm:true` in the TradingView alert body.
+  keep `ENFORCE_MARKET_HOURS=true`, and put `"confirm": true` in the TradingView alert body.
 - Re-run the smoke with **one tiny position**, watch Telegram + the dashboard closely, then scale
   slowly. Real money is irreversible — start with the smallest size and lowest caps.
 

@@ -1,15 +1,26 @@
-# REAL-mode enablement — conditions (spec only, NOT implemented)
+# REAL-mode enablement — conditions
 
-**Status:** out of scope for the event-driven bridge plan. This document records
-what a future, explicitly-approved plan MUST satisfy before REAL auto-execution
-is ever enabled. No code implements REAL webhook trading today.
+**Status (2026-07-12):** the **gate layer is now implemented and off by default**
+(`trader/safety.py` + `web/app.py`; see `docs/HANDOVER-live-trading.md`). Items 1,
+3, and 4 below are built and unit-tested. Items 2 (live-broker startup
+reconciliation), 5 (recorded-corpus dry-run replay), and 6 (human checkpoint)
+remain REQUIRED before any real capital is risked.
 
 ## Current guardrails (keep until deliberately removed)
 
 - `TRD_ENV=REAL` is only reached with `BROKER=moomoo` and an explicit env change.
-- `/webhook` is hard-blocked in REAL mode (`web/app.py`): it returns 403 before
-  any order path. This block must stay until every condition below is met.
+- `/webhook` stays hard-blocked in REAL mode unless `ALLOW_REAL_WEBHOOK=true`
+  (`web/app.py`): otherwise it returns 403 `DISABLED` before any order path.
 - Dashboard REAL orders already require a literal `confirm: true`.
+
+## Implemented (Step 2, default OFF)
+
+- **Double opt-in** — `ALLOW_REAL_WEBHOOK=true` (env, owner-set) AND per-alert
+  `confirm: true`; either missing → 403/412. (`test_safety.py`, `test_web_app.py`)
+- **Circuit breakers** — `MAX_NOTIONAL` per-order cap and `MAX_DAILY_LOSS`
+  realized-loss kill-switch (`state/store.py: realized_pnl_since`); 0 disables each.
+- **Market-hours fence** — REAL `open` orders rejected outside US RTH
+  (`ENFORCE_MARKET_HOURS`, holidays not modelled); closing always allowed.
 
 ## Required before enabling REAL webhook auto-execution
 

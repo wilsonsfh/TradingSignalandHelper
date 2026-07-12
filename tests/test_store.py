@@ -142,3 +142,38 @@ def test_in_memory_store_persists_across_operations():
     store.save_position(position)
 
     assert store.load_positions() == [position]
+
+
+def test_realized_pnl_since_sums_todays_closed_longs(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    store = StateStore(tmp_path / "pnl.sqlite")
+    now = datetime.now(timezone.utc)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Closed today: +6 (winner) and -10 (loser) => net -4.
+    store.save_position(Position(
+        "AAPL", 2, 100.0, status="CLOSED", close_price=103.0,
+        close_reason="TAKE_PROFIT", closed_at=now,
+    ))
+    store.save_position(Position(
+        "MSFT", 1, 50.0, status="CLOSED", close_price=40.0,
+        close_reason="STOP_LOSS", closed_at=now,
+    ))
+    # Still open today: must be ignored (no realized P&L yet).
+    store.save_position(Position("NVDA", 1, 900.0, status="OPEN"))
+    # Closed yesterday: before the window, must be ignored.
+    store.save_position(Position(
+        "SPY", 1, 400.0, status="CLOSED", close_price=300.0,
+        close_reason="STOP_LOSS", closed_at=start - timedelta(hours=1),
+    ))
+
+    assert store.realized_pnl_since(start.isoformat()) == pytest.approx(-4.0)
+
+
+def test_realized_pnl_since_is_zero_when_nothing_closed(tmp_path):
+    from datetime import datetime, timezone
+
+    store = StateStore(tmp_path / "empty.sqlite")
+    start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    assert store.realized_pnl_since(start.isoformat()) == 0.0

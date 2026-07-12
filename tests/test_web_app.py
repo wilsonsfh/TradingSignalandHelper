@@ -641,3 +641,88 @@ def test_webhook_blocked_in_real_money_mode():
     app = create_app(config=cfg, feed=feed, broker=MockBroker())
     response = app.test_client().post("/webhook", json=_alert())
     assert response.status_code == 403
+
+
+# ───────── REAL-money webhook gate (Step 2: default OFF) ─────────
+
+def _real_app(*, allow_real=True, max_notional=0.0, max_daily_loss=0.0,
+              enforce_market_hours=False, store=None):
+    feed = FakeFeed({
+        "UP": [10, 10, 10, 10, 10, 10, 12],
+        "DN": [10, 10, 10, 10, 10, 10, 8],
+    })
+    broker = MockBroker()
+    cfg = _cfg(["UP", "DN"])
+    cfg.broker = "moomoo"
+    cfg.trd_env = "REAL"
+    cfg.data_source = "yfinance"
+    cfg.webhook_enabled = True
+    cfg.webhook_secret = WEBHOOK_TEST_SECRET
+    cfg.allow_real_webhook = allow_real
+    cfg.max_notional = max_notional
+    cfg.max_daily_loss = max_daily_loss
+    cfg.enforce_market_hours = enforce_market_hours
+    app = create_app(config=cfg, feed=feed, broker=broker, store=store)
+    app.testing = True
+    return app, broker
+
+
+def test_webhook_real_hard_blocked_without_optin():
+    app, broker = _real_app(allow_real=False)
+    r = app.test_client().post("/webhook", json=_alert(confirm=True))
+    assert r.status_code == 403
+    assert r.get_json()["status"] == "DISABLED"
+    assert broker.open_positions() == []
+
+
+def test_webhook_real_requires_confirm_even_with_optin():
+    app, broker = _real_app(allow_real=True)
+    r = app.test_client().post("/webhook", json=_alert())  # no confirm
+    assert r.status_code == 412
+    assert r.get_json()["status"] == "CONFIRM_REQUIRED"
+    assert broker.open_positions() == []
+
+
+def test_webhook_real_confirm_must_be_literal_true():
+    app, _ = _real_app(allow_real=True)
+    r = app.test_client().post("/webhook", json=_alert(confirm="true"))
+    assert r.status_code == 412
+    assert r.get_json()["status"] == "CONFIRM_REQUIRED"
+
+
+def test_webhook_real_opens_with_optin_and_confirm():
+    app, broker = _real_app(allow_real=True, enforce_market_hours=False)
+    r = app.test_client().post("/webhook", json=_alert(confirm=True))
+    assert r.status_code == 200
+    assert r.get_json()["status"] == "OPENED"
+    assert broker.open_positions()[0].symbol == "UP"
+
+
+def test_webhook_real_notional_cap_blocks_oversized_order():
+    app, broker = _real_app(allow_real=True, max_notional=5.0)  # UP=12 > 5
+    r = app.test_client().post("/webhook", json=_alert(confirm=True))
+    assert r.status_code == 403
+    assert r.get_json()["status"] == "NOTIONAL_EXCEEDED"
+    assert broker.open_positions() == []
+
+
+def test_webhook_real_daily_loss_kill_switch_blocks():
+    store = StateStore(":memory:")
+    store.save_position(Position(
+        "DN", 1, 100.0, status="CLOSED", close_price=80.0,
+        close_reason="STOP_LOSS", closed_at=datetime.now(timezone.utc),
+    ))  # -20 realized today
+    app, broker = _real_app(allow_real=True, max_daily_loss=10.0, store=store)
+    r = app.test_client().post("/webhook", json=_alert(confirm=True))
+    assert r.status_code == 403
+    assert r.get_json()["status"] == "KILL_SWITCH"
+    assert broker.open_positions() == []
+
+
+def test_webhook_real_close_allowed_with_confirm():
+    app, broker = _real_app(allow_real=True, enforce_market_hours=False)
+    client = app.test_client()
+    assert client.post("/webhook", json=_alert(event_id="o", confirm=True)).status_code == 200
+    r = client.post("/webhook", json=_alert(event_id="c", action="close", confirm=True))
+    assert r.get_json()["status"] == "CLOSED"
+    assert broker.open_positions() == []

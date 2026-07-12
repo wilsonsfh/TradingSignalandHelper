@@ -92,3 +92,32 @@ def test_moomoo_requires_yfinance_strategy_data():
 
     with pytest.raises(ValueError, match="DATA_SOURCE=yfinance"):
         cfg.validate()
+
+
+def test_real_mode_settings_default_off(monkeypatch):
+    for name in (
+        "ALLOW_REAL_WEBHOOK",
+        "MAX_NOTIONAL",
+        "MAX_DAILY_LOSS",
+        "ENFORCE_MARKET_HOURS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    cfg = Config()
+    assert cfg.allow_real_webhook is False   # REAL webhook trading opt-in, off by default
+    assert cfg.max_notional == 0.0           # 0 = breaker disabled
+    assert cfg.max_daily_loss == 0.0         # 0 = kill-switch disabled
+    assert cfg.enforce_market_hours is True  # fence on by default in REAL
+
+
+def test_negative_max_notional_fails_closed():
+    cfg = Config()
+    cfg.max_notional = -1.0
+    with pytest.raises(ValueError, match="MAX_NOTIONAL"):
+        cfg.validate()
+
+
+def test_negative_max_daily_loss_fails_closed():
+    cfg = Config()
+    cfg.max_daily_loss = -1.0
+    with pytest.raises(ValueError, match="MAX_DAILY_LOSS"):
+        cfg.validate()

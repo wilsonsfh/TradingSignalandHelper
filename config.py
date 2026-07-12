@@ -72,6 +72,19 @@ class Config:
     )
     telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
     telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
+    # --- REAL-money webhook enablement (all default OFF; see docs/HANDOVER) ---
+    # Second half of the double opt-in: even in REAL mode the webhook stays
+    # hard-blocked unless this is explicitly set true on the host.
+    allow_real_webhook: bool = field(
+        default_factory=lambda: _env_bool("ALLOW_REAL_WEBHOOK", False)
+    )
+    # Circuit breakers. 0 disables the individual breaker.
+    max_notional: float = field(default_factory=lambda: float(os.getenv("MAX_NOTIONAL", "0")))
+    max_daily_loss: float = field(default_factory=lambda: float(os.getenv("MAX_DAILY_LOSS", "0")))
+    # Coarse RTH fence for REAL `open` orders (holidays not modelled).
+    enforce_market_hours: bool = field(
+        default_factory=lambda: _env_bool("ENFORCE_MARKET_HOURS", True)
+    )
     web_host: str = field(default_factory=lambda: os.getenv("WEB_HOST", "127.0.0.1"))
     web_port: int = field(default_factory=lambda: int(os.getenv("WEB_PORT", "5000")))
 
@@ -100,6 +113,10 @@ class Config:
             raise ValueError("MAX_ALERT_QUANTITY must be positive")
         if self.webhook_rate_per_min <= 0:
             raise ValueError("WEBHOOK_RATE_PER_MIN must be positive")
+        if self.max_notional < 0:
+            raise ValueError("MAX_NOTIONAL must be zero (disabled) or positive")
+        if self.max_daily_loss < 0:
+            raise ValueError("MAX_DAILY_LOSS must be zero (disabled) or positive")
 
 
 def load_config() -> Config:

@@ -12,9 +12,24 @@
 | Event-driven bridge | Complete offline | Webhook honors alert tp/sl/qty; manual-OCO stop order; event log + Incoming-alerts UI; HMAC/IP/rate-limit hardening. |
 | GitHub publication | Complete | Default `main` and motivation-first README pushed. |
 | OpenD paper account | Pending owner gate | Step 1 runbook in `docs/HANDOVER-live-trading.md`; run one small `TRD_ENV=SIMULATE` lifecycle. |
-| REAL money | Design ready, gated | Build spec `docs/superpowers/specs/2026-07-12-real-mode-enablement.md` + Step 2 in `docs/HANDOVER-live-trading.md`; ships OFF (`ALLOW_REAL_WEBHOOK`). |
+| REAL money | Gate built (OFF); pre-capital follow-ups pending | Double opt-in + circuit breakers + market-hours in `trader/safety.py`/`web/app.py` (226 tests). Before capital: startup reconciliation, dry-run replay, human sign-off (`docs/superpowers/specs/2026-07-12-real-mode-enablement.md`). |
 
 ## Completed
+
+- **2026-07-12 — REAL-money enablement gate (Step 2 code; ships OFF).** Built the
+  safety layer that makes flipping REAL on *safe*, all default-off and proven offline
+  (**226 tests**, TDD). New `trader/safety.py` `evaluate_real(...)` enforces a double
+  opt-in (`ALLOW_REAL_WEBHOOK=true` + per-alert literal `confirm:true`), a `MAX_NOTIONAL`
+  per-order cap, a `MAX_DAILY_LOSS` realized-loss kill-switch (backed by new
+  `state/store.py: realized_pnl_since`), and a US-RTH market-hours fence for opens
+  (`ENFORCE_MARKET_HOURS`; closing always allowed). `web/app.py` `/webhook` stays
+  hard-blocked in REAL unless opted in, then evaluates **before** claiming the event
+  (rejections re-sendable) and logs the decision (`DISABLED`/`CONFIRM_REQUIRED`/
+  `NOTIONAL_EXCEEDED`/`KILL_SWITCH`/`MARKET_CLOSED`). `config.py` gained the four knobs
+  with fail-closed validation; `.env.example` documents them. SIMULATE/mock paths
+  untouched. **Still required before real capital:** startup reconciliation against the
+  live broker, recorded-corpus dry-run replay, and a human sign-off (tracked in the spec).
+  Branch `feature/event-driven-tradingview-bridge`.
 
 - **2026-07-12 — Live-trading handover doc.** Added `docs/HANDOVER-live-trading.md`: a
   context-free runbook for **Step 1** (paper-first `TRD_ENV=SIMULATE` loop — OpenD, `.env`,

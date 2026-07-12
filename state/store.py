@@ -385,6 +385,26 @@ class StateStore:
         with self._connection() as conn:
             conn.execute("DELETE FROM symbol_claims WHERE symbol = ?", (symbol,))
 
+    def realized_pnl_since(self, start_iso: str) -> float:
+        """Sum realized P&L of long positions CLOSED at/after ``start_iso``.
+
+        Long-only: realized P&L = (close_price - avg_price) * quantity. Open
+        positions and closes before the window are excluded. Feeds the REAL-mode
+        daily-loss kill-switch.
+        """
+        with self._connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COALESCE(SUM((close_price - avg_price) * quantity), 0.0)
+                FROM positions
+                WHERE status = 'CLOSED'
+                  AND close_price IS NOT NULL
+                  AND closed_at >= ?
+                """,
+                (start_iso,),
+            ).fetchone()
+        return float(row[0]) if row and row[0] is not None else 0.0
+
     def close(self) -> None:
         if self._keeper is not None:
             self._keeper.close()
