@@ -2,10 +2,22 @@
 
 **A local, paper-first US-stock signal desk that helps you learn, review, and execute trades without jumping straight to real money.**
 
-TradingSignalandHelper combines two small tools in one Python application:
+TradingSignalandHelper is a **TradingView → moomoo auto-trading bridge** in the spirit
+of Curteis Yang's design: **the Pine script is the brain, the bridge stays dumb.** A
+TradingView alert fires on a chart *event*, and the app executes it — while making every
+step of the order lifecycle inspectable.
 
-1. A **signals bot** that turns price candles into `BUY`, `SELL`, or `HOLD` decisions using an EMA crossover strategy.
-2. A **human-in-the-loop trade helper** whose dashboard shows the proposed order, take-profit, stop-loss, broker state, and activity before confirmation.
+It bundles, in one Python application:
+
+1. An **event-driven bridge**: a `POST /webhook` endpoint that accepts a TradingView
+   alert (`action`, `symbol`, `side`, `quantity`, `tp`, `sl`) and executes it, honoring
+   the alert's own size and risk levels.
+2. A **broker-safe executor**: entry + limit take-profit + an optional resting stop-loss,
+   tied together as a manual OCO because moomoo has no native OCO.
+3. A **human-in-the-loop dashboard** (the Calm Risk Console) that streams incoming alerts,
+   and shows each position's protection legs, P&L, and broker state.
+4. An optional built-in **EMA signal engine** for manual review when you have no external
+   alert source.
 
 The application defaults to synthetic prices and fake fills. It needs no account,
 credentials, or network connection for its complete mock workflow.
@@ -76,7 +88,10 @@ Use TradingSignalandHelper if you want to:
 | Background monitor | Checks soft TP/SL independently of dashboard polling. |
 | Broker-safe states | Tracks pending, partial, unprotected, and unknown-order conditions. |
 | Duplicate protection | Serializes local mutations and claims symbols before submission. |
-| Optional webhook | Rejects weak secrets, stale/replayed events, unknown symbols, and REAL mode. |
+| Event-driven webhook | Executes TradingView alerts, honoring alert `quantity`/`tp`/`sl`; rejects weak secrets, stale/replayed events, unknown symbols, over-cap sizes, and REAL mode. |
+| Manual OCO | Optional resting broker stop order paired with the limit take-profit; a fill on one leg cancels the other. |
+| Incoming-alerts stream | The dashboard shows every inbound event (accepted or rejected) and each position's Entry/TP/Stop legs. |
+| Defence-in-depth | Optional HMAC signature, source-IP allow-list, and per-IP rate limit on `/webhook`. |
 | Moomoo adapter | Contract-tested against the real `moomoo-api` `10.8.6808` package shape. |
 
 ## Quick Start: First Paper Trade
@@ -173,18 +188,18 @@ values stop startup instead of silently falling through to live behavior.
 ## How It Works
 
 ```text
-PriceFeed -> EMA Strategy -> Signal -> Dashboard review -> Executor -> Broker
-                                  |                         |
-                                  |                         +-> entry / TP / exit
-                                  |
-                                  +-> dashboard review and confirmation
+TradingView alert (event) ─┐
+                           ├─> /webhook ─> Signal ─> Executor ─> Broker
+Built-in EMA strategy  ────┘   (honors alert tp/sl/qty)     │
+   (manual dashboard path)                                  └─> entry / limit-TP / stop-SL (manual OCO)
 
 SQLite StateStore <-> TradingRuntime <-> background soft-stop monitor
+Event log ─> /api/events ─> "Incoming alerts" panel
 ```
 
 ### Main Objects
 
-- **Signal:** symbol, action, price, TP, SL, reason, timestamp.
+- **Signal:** symbol, action, price, quantity, TP, SL, reason, timestamp.
 - **Position:** quantity, basis, protection levels, broker IDs, and lifecycle state.
 - **Activity:** order, monitor, closure, webhook, and error evidence.
 
@@ -267,9 +282,14 @@ Copy `.env.example` to `.env` and change only what you understand.
 | `SOFT_STOP_POLL_SECONDS` | `4.0` | Background risk-monitor interval. |
 | `OPEND_HOST` | `127.0.0.1` | Local Moomoo OpenD host. |
 | `OPEND_PORT` | `11111` | Local Moomoo OpenD port. |
-| `WEBHOOK_ENABLED` | `false` | Enables optional mock/paper webhook. |
+| `WEBHOOK_ENABLED` | `false` | Enables the TradingView webhook (paper only). |
 | `WEBHOOK_SECRET` | `change-me` | Must be replaced with at least 32 characters. |
 | `WEBHOOK_MAX_AGE_SECONDS` | `300` | Replay/age window. |
+| `WEBHOOK_SIGNATURE_REQUIRED` | `false` | Require an HMAC `X-Signature` header. |
+| `WEBHOOK_IP_ALLOWLIST` | (empty) | Comma-separated source IPs allowed on `/webhook`; empty = rely on the edge/WAF. |
+| `WEBHOOK_RATE_PER_MIN` | `5` | Per-IP `/webhook` rate limit. |
+| `MAX_ALERT_QUANTITY` | `100` | Server cap on alert-supplied quantity. |
+| `USE_BROKER_STOP_ORDER` | `false` | Resting broker stop order (manual OCO) vs a soft monitored stop. |
 | `WEB_HOST` | `127.0.0.1` | Dashboard bind host. |
 | `WEB_PORT` | `5000` | Dashboard port. |
 
@@ -308,41 +328,53 @@ Credential-free inspection already validated the Python method signatures and ac
 terminal order statuses in `moomoo-api` `10.8.6808`. No account-facing behavior is
 claimed until this smoke test is completed.
 
-## Optional TradingView Webhook
+## Event-Driven Signals (TradingView Webhook)
 
-The webhook is disabled by default and is never allowed to trade in REAL mode.
+This is the primary signal path and the core of the TradingView → moomoo bridge. The
+webhook is disabled by default and is never allowed to trade in REAL mode.
 
 ```dotenv
 WEBHOOK_ENABLED=true
 WEBHOOK_SECRET=replace-with-at-least-32-random-characters
 WEBHOOK_MAX_AGE_SECONDS=300
+# Optional hardening:
+WEBHOOK_SIGNATURE_REQUIRED=false
+WEBHOOK_IP_ALLOWLIST=
+WEBHOOK_RATE_PER_MIN=5
 ```
 
-Example request:
+The alert is the brain. Point a TradingView alert at `POST /webhook` with a body like:
 
 ```json
 {
   "event_id": "unique-alert-id",
   "timestamp": "2026-07-12T12:00:00Z",
-  "action": "buy",
+  "action": "open",
+  "side": "buy",
   "symbol": "AAPL",
+  "quantity": 4,
+  "tp": 210.00,
+  "sl": 190.00,
   "key": "replace-with-at-least-32-random-characters"
 }
 ```
 
-The endpoint rejects:
+- `action`/`side` choose open-long vs close: `open`/`buy` opens, `close`/`sell` closes.
+- `quantity`, `tp`, and `sl` are **honored** (within the server `MAX_ALERT_QUANTITY` cap
+  and a `sl < tp` sanity check). If `tp`/`sl` are omitted, the server falls back to
+  `TAKE_PROFIT_PCT` / `STOP_LOSS_PCT`. The reference price always comes from the server feed.
 
-- disabled or weak/default secrets;
-- stale, future-skewed, or replayed events;
-- malformed/non-object JSON;
-- unknown actions and symbols outside the watchlist;
-- every request in REAL mode.
+The endpoint rejects: disabled or weak/default secrets; stale, future-skewed, or replayed
+events; malformed/non-object JSON; unknown actions; symbols outside the watchlist;
+quantities over the cap; and every request in REAL mode. With hardening enabled it also
+enforces an HMAC `X-Signature`, a source-IP allow-list, and a per-IP rate limit.
 
-Caller-supplied prices and risk levels are ignored. The server reads its configured
-feed and derives TP/SL itself.
+Every inbound alert — accepted or rejected — is recorded to the event log and shown in the
+dashboard's **Incoming alerts** panel and via `GET /api/events`.
 
-Do not expose the Flask development server directly to the Internet. Public webhook
-deployment still needs HTTPS, authentication/rate limiting, and a production server.
+Do not expose the Flask development server directly to the Internet. For production, see
+`docs/deploy/README.md` (OpenD + Caddy HTTPS + Cloudflare WAF/rate-limit + market-hours
+scheduling).
 
 ## Project Structure
 
@@ -365,7 +397,7 @@ docs/superpowers/            Specs, plans, and A/B/C design comparisons
 
 ## Verification
 
-The current credential-free gate contains **152 tests**.
+The current credential-free gate contains **188 tests**.
 
 ```bash
 .venv/bin/pytest -q
@@ -383,6 +415,9 @@ Additional observed gates:
 - 44px mobile controls;
 - native dialog Escape/focus restoration across polling re-renders;
 - stale-response protection and unknown-quantity SELL blocking;
+- alert-honoring webhook (quantity/tp/sl), event log, and `/api/events` surfacing;
+- webhook defence-in-depth: HMAC signature, IP allow-list, and per-IP rate limit;
+- manual-OCO broker stop order with sibling-leg cancellation;
 - first-run guide dismissal/reload/replay acceptance;
 - clean browser console.
 
@@ -405,13 +440,17 @@ The highest-value next steps are:
 3. Add max exposure, daily-loss, market-hours, and stale-quote guards.
 4. Reconcile local positions/orders against broker truth at startup.
 5. Add health notifications and background-service packaging.
-6. Deploy the optional webhook behind production HTTPS and rate limiting.
+6. Deploy the webhook to production using `docs/deploy/README.md` (HTTPS + Cloudflare).
 7. Consider REAL mode only after extended paper observation and a separate safety review.
 
 ## Documentation
 
+- Event-driven bridge plan: `docs/superpowers/plans/2026-07-12-event-driven-tradingview-bridge.md`
+- Deployment runbook: `docs/deploy/README.md`
+- REAL-mode enablement conditions: `docs/superpowers/specs/2026-07-12-real-mode-enablement.md`
 - Completion design: `docs/superpowers/specs/2026-07-11-credential-free-completion-design.md`
 - Dashboard design: `docs/superpowers/specs/2026-07-11-dashboard-revamp-design.md`
+- Event-stream comparison: `docs/superpowers/mockups/2026-07-12-event-stream-options.html`
 - Dashboard comparison: `docs/superpowers/mockups/2026-07-11-dashboard-options.html`
 - Onboarding comparison: `docs/superpowers/mockups/2026-07-12-onboarding-options.html`
 

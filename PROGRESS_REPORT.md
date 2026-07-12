@@ -9,11 +9,24 @@
 | Moomoo SDK contract | Complete offline | `moomoo-api` `10.8.6808` signatures/statuses validated. |
 | Calm Risk Console | Complete | Responsive browser and accessibility/state acceptance passed. |
 | First-run guidance | Complete | Paper-only dismiss/reload/replay flow verified. |
+| Event-driven bridge | Complete offline | Webhook honors alert tp/sl/qty; manual-OCO stop order; event log + Incoming-alerts UI; HMAC/IP/rate-limit hardening. |
 | GitHub publication | Complete | Default `main` and motivation-first README pushed. |
 | OpenD paper account | Pending owner gate | Run one small `TRD_ENV=SIMULATE` lifecycle. |
 | REAL money | Out of scope | Not validated or recommended. |
 
 ## Completed
+
+- **2026-07-12 — Event-driven TradingView → moomoo bridge.** Reframed the app around
+  Curteis Yang's "Pine is the brain, the bridge is dumb" model on branch
+  `feature/event-driven-tradingview-bridge`: a validating alert parser that honors
+  `quantity`/`tp`/`sl` (`1a0027d`, `9e1cf61`, `fee1cf9`), an optional resting broker
+  stop-loss with manual OCO (`4d558fd`), restart-persisted stop legs (`effdf5c`), a
+  first-class event log + `/api/events` (`01ee175`), webhook defence-in-depth —
+  HMAC / IP allow-list / rate limit (`7b5a3ea`), deployment + REAL-mode docs
+  (`fbbbba7`), and the Incoming-alerts + OCO-legs dashboard (`f4101ce`). Verification:
+  188 tests, Python compile, JavaScript syntax, dependency check, clean Git diff, and
+  a mock end-to-end webhook smoke (alert quantity/tp/sl honored, surfaced on
+  `/api/events`). REAL auto-execution remains out of scope and webhook-blocked.
 
 - **2026-07-12 — Credential-free application and GitHub publication.** Durable
   SQLite runtime, broker-safe state machine, replay-resistant webhook, responsive
