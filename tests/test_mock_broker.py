@@ -21,6 +21,16 @@ def test_place_bracket_opens_position_at_last_price():
     assert len(b.open_positions()) == 1
 
 
+def test_mock_soft_stop_exits_and_has_no_broker_stop_order():
+    b = MockBroker()
+    pos = _open_long(b, price=100.0, tp=103.0, sl=98.0)
+    assert pos.stop_loss_order_id is None
+    closed = b.update_price("AAPL", 97.0)
+    assert closed == [pos]
+    assert pos.status == "CLOSED"
+    assert pos.close_reason == "STOP_LOSS"
+
+
 def test_take_profit_closes_position():
     b = MockBroker()
     _open_long(b, price=100.0, tp=103.0, sl=98.0)

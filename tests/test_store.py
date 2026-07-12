@@ -25,6 +25,26 @@ def test_position_survives_store_restart(tmp_path):
     assert StateStore(path).load_positions(open_only=True) == [position]
 
 
+def test_stop_order_fields_survive_store_restart(tmp_path):
+    path = tmp_path / "state.sqlite"
+    position = Position(
+        "AAPL",
+        1,
+        100.0,
+        103.0,
+        98.0,
+        stop_loss_order_id="stop-1",
+        stop_loss_order_quantity=1.0,
+    )
+
+    StateStore(path).save_position(position)
+
+    loaded = StateStore(path).load_positions(open_only=True)
+    assert loaded == [position]
+    assert loaded[0].stop_loss_order_id == "stop-1"
+    assert loaded[0].stop_loss_order_quantity == 1.0
+
+
 def test_closed_position_is_not_loaded_as_open(tmp_path):
     store = StateStore(tmp_path / "state.sqlite")
     position = Position("AAPL", 1, 100.0)

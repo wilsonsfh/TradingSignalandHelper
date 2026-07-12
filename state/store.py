@@ -89,6 +89,8 @@ class StateStore:
                     entry_order_id TEXT,
                     take_profit_order_id TEXT,
                     take_profit_order_quantity REAL,
+                    stop_loss_order_id TEXT,
+                    stop_loss_order_quantity REAL,
                     exit_order_id TEXT,
                     exit_order_quantity REAL
                 );
@@ -133,9 +135,15 @@ class StateStore:
             position_columns = {
                 row["name"] for row in conn.execute("PRAGMA table_info(positions)")
             }
-            for name in ("take_profit_order_quantity", "exit_order_quantity"):
+            expected_columns = {
+                "take_profit_order_quantity": "REAL",
+                "exit_order_quantity": "REAL",
+                "stop_loss_order_id": "TEXT",
+                "stop_loss_order_quantity": "REAL",
+            }
+            for name, coltype in expected_columns.items():
                 if name not in position_columns:
-                    conn.execute(f"ALTER TABLE positions ADD COLUMN {name} REAL")
+                    conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {coltype}")
 
     def save_signal(self, signal: Signal) -> None:
         with self._connection() as conn:
@@ -186,6 +194,8 @@ class StateStore:
                 entry_order_id=row["entry_order_id"],
                 take_profit_order_id=row["take_profit_order_id"],
                 take_profit_order_quantity=row["take_profit_order_quantity"],
+                stop_loss_order_id=row["stop_loss_order_id"],
+                stop_loss_order_quantity=row["stop_loss_order_quantity"],
                 exit_order_id=row["exit_order_id"],
                 exit_order_quantity=row["exit_order_quantity"],
             )
@@ -341,8 +351,9 @@ class StateStore:
                     position_id, symbol, quantity, avg_price, take_profit, stop_loss,
                     status, close_price, close_reason, opened_at, closed_at,
                     entry_order_id, take_profit_order_id, take_profit_order_quantity,
+                    stop_loss_order_id, stop_loss_order_quantity,
                     exit_order_id, exit_order_quantity
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(position_id) DO UPDATE SET
                     symbol = excluded.symbol,
                     quantity = excluded.quantity,
@@ -357,6 +368,8 @@ class StateStore:
                     entry_order_id = excluded.entry_order_id,
                     take_profit_order_id = excluded.take_profit_order_id,
                     take_profit_order_quantity = excluded.take_profit_order_quantity,
+                    stop_loss_order_id = excluded.stop_loss_order_id,
+                    stop_loss_order_quantity = excluded.stop_loss_order_quantity,
                     exit_order_id = excluded.exit_order_id,
                     exit_order_quantity = excluded.exit_order_quantity
                 """,
@@ -375,6 +388,8 @@ class StateStore:
                     position.entry_order_id,
                     position.take_profit_order_id,
                     position.take_profit_order_quantity,
+                    position.stop_loss_order_id,
+                    position.stop_loss_order_quantity,
                     position.exit_order_id,
                     position.exit_order_quantity,
                 ),
