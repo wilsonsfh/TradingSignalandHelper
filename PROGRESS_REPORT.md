@@ -11,10 +11,19 @@
 | First-run guidance | Complete | Paper-only dismiss/reload/replay flow verified. |
 | Event-driven bridge | Complete offline | Webhook honors alert tp/sl/qty; manual-OCO stop order; event log + Incoming-alerts UI; HMAC/IP/rate-limit hardening. |
 | GitHub publication | Complete | Default `main` and motivation-first README pushed. |
-| OpenD paper account | Pending owner gate | Run one small `TRD_ENV=SIMULATE` lifecycle. |
-| REAL money | Out of scope | Not validated or recommended. |
+| OpenD paper account | Pending owner gate | Step 1 runbook in `docs/HANDOVER-live-trading.md`; run one small `TRD_ENV=SIMULATE` lifecycle. |
+| REAL money | Design ready, gated | Build spec `docs/superpowers/specs/2026-07-12-real-mode-enablement.md` + Step 2 in `docs/HANDOVER-live-trading.md`; ships OFF (`ALLOW_REAL_WEBHOOK`). |
 
 ## Completed
+
+- **2026-07-12 — Live-trading handover doc.** Added `docs/HANDOVER-live-trading.md`: a
+  context-free runbook for **Step 1** (paper-first `TRD_ENV=SIMULATE` loop — OpenD, `.env`,
+  quick Tunnel, TradingView alert, SIMULATE smoke checklist) and **Step 2** (REAL-money
+  enablement — build spec + exact code touch-points: `config.py` flags, the webhook REAL gate
+  at `web/app.py:315`, daily-loss/notional/market-hours guards, startup reconciliation; ships
+  OFF behind `ALLOW_REAL_WEBHOOK` + per-alert `confirm:true`). Captures the account/secret/
+  free-tier traps (personal Cloudflare account only, secrets never committed, quick-tunnel is
+  free/ephemeral). Public-safe (no IDs/secrets). Branch `feature/event-driven-tradingview-bridge`.
 
 - **2026-07-12 — Telegram alerts (bridge) + Layer-2 host scaffolds.** The Python bridge
   now sends best-effort, non-blocking **Telegram** notifications on open / close /
