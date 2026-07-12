@@ -16,6 +16,14 @@
 
 ## Completed
 
+- **2026-07-12 — Credentials & setup guide (`docs/SETUP.md`).** Phased, checkpointed
+  hand-holding for the owner-provided accounts/tools: **Phase A** (moomoo account + OpenD
+  + SDK → first paper trade from the dashboard, no TradingView/Cloudflare) and **Phase B**
+  (webhook secret, cloudflared tunnel, TradingView paid+2FA alert, optional Telegram/Worker),
+  plus REAL-money deltas and grounded gotchas. Verified against official moomoo OpenAPI +
+  TradingView webhook docs (paid plan + 2FA, ports 80/443, no IPv6, 3s timeout; OpenD holds
+  login on 127.0.0.1:11111) and the repo's `requirements-moomoo.txt`.
+
 - **2026-07-12 — Dashboard revamp: obvious REAL-money trigger + Apple-style motion.**
   Made REAL mode unmistakable and added purposeful motion, conforming to the existing
   dark token system (no new stack; not a Kumo/CF app). **Obvious trigger:** a sticky
