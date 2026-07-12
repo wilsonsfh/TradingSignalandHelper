@@ -256,6 +256,22 @@ def test_frontend_asset_covers_position_safety_states():
     assert 'addEventListener("cancel"' in script
 
 
+def test_index_exposes_event_stream_panel():
+    app, _ = _app()
+    html = app.test_client().get("/").get_data(as_text=True)
+    assert 'id="eventList"' in html
+    assert "Incoming alerts" in html
+    assert 'id="statEvents"' in html
+
+
+def test_frontend_asset_covers_event_stream_and_legs():
+    script = Path("web/static/app.js").read_text()
+    assert "/api/events" in script
+    assert "renderEvents" in script
+    assert "position-legs" in script
+    assert "loadEvents" in script
+
+
 def test_live_index_uses_live_workspace_copy():
     feed = FakeFeed({"UP": [10, 10, 10, 10, 10, 10, 12]})
     cfg = _cfg(["UP"])

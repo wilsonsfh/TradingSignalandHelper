@@ -84,6 +84,8 @@ def _position_dict(p: Position, current: Optional[float] = None) -> Dict[str, An
         "status": p.status,
         "close_price": p.close_price,
         "close_reason": p.close_reason,
+        "tp_order": bool(p.take_profit_order_id),
+        "stop_order": bool(p.stop_loss_order_id),
     }
     if current is not None:
         d["current_price"] = current

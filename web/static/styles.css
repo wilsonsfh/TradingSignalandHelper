@@ -287,6 +287,23 @@ h1, h2 { line-height: var(--leading-tight); text-wrap: balance; }
 .activity-trade, .activity-hook { color: var(--accent); }
 .activity-message { min-width: 0; overflow-wrap: anywhere; color: var(--muted-strong); }
 
+.event-list { padding: var(--space-2) var(--space-4); }
+.event-item { display: grid; grid-template-columns: 64px 46px minmax(0, 1fr) auto; gap: var(--space-3); align-items: baseline; border-bottom: 1px solid var(--line); padding: var(--space-3) 0; }
+.event-item:last-child { border-bottom: 0; }
+.event-time { color: var(--muted); font-family: var(--mono); font-size: .6875rem; }
+.event-source { color: var(--accent); font-family: var(--mono); font-size: .625rem; font-weight: 800; letter-spacing: .02em; }
+.event-main { display: grid; min-width: 0; gap: 3px; }
+.event-headline { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.event-levels { overflow-wrap: anywhere; color: var(--muted); font-family: var(--mono); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+
+.position-legs { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.leg-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 3px 7px; color: var(--muted-strong); font-size: .6875rem; }
+.leg-chip b { color: var(--text); font-weight: 700; }
+.leg-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+.leg-ok .leg-dot { background: var(--up); }
+.leg-warn .leg-dot { background: var(--warn); }
+.leg-off .leg-dot { background: var(--line-strong); }
+
 .empty-state { display: grid; justify-items: center; gap: 3px; padding: var(--space-8) var(--space-4); text-align: center; }
 .empty-state strong { color: var(--muted-strong); font-size: var(--text-sm); }
 .empty-state span { max-width: 46ch; color: var(--muted); font-size: var(--text-xs); }
@@ -369,6 +386,8 @@ h1, h2 { line-height: var(--leading-tight); text-wrap: balance; }
   .position-actions .btn { width: 100%; }
   .activity-item { grid-template-columns: 58px 52px minmax(0, 1fr); gap: var(--space-2); }
   .activity-message { font-size: var(--text-xs); }
+  .event-item { grid-template-columns: 56px minmax(0, 1fr) auto; gap: var(--space-2); }
+  .event-source { display: none; }
   .dialog-actions { flex-direction: column-reverse; }
   .dialog-actions .btn { min-height: 44px; width: 100%; }
   .toast-wrap { right: var(--space-3); bottom: var(--space-3); }

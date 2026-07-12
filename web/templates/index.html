@@ -109,6 +109,20 @@
       </section>
     </div>
 
+    <section class="panel events-panel" aria-labelledby="eventsHeading" aria-describedby="eventsDescription">
+      <div class="panel-head">
+        <div>
+          <p class="section-label">Event-driven signals</p>
+          <h2 id="eventsHeading">Incoming alerts</h2>
+          <p id="eventsDescription">TradingView webhook events — the alert is the signal.</p>
+        </div>
+        <span class="count-badge" id="eventCount"><strong id="statEvents">—</strong> recent</span>
+      </div>
+      <ul class="event-list" id="eventList" aria-live="polite" aria-busy="true">
+        <li class="empty-state compact">No alerts received yet.</li>
+      </ul>
+    </section>
+
     <section class="panel activity-panel" aria-labelledby="activityHeading">
       <div class="panel-head activity-head">
         <div>

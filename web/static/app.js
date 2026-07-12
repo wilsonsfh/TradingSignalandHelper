@@ -5,6 +5,7 @@ const ORDER_QUANTITY = Number(document.documentElement.dataset.quantity || 1);
 let latestPositionsBySymbol = new Map();
 let signalRequestVersion = 0;
 let stateRequestVersion = 0;
+let eventRequestVersion = 0;
 const QUICK_START_STORAGE_KEY = "signal-desk-guide-dismissed";
 
 const $ = (selector) => document.querySelector(selector);
@@ -113,7 +114,7 @@ async function api(method, url, body) {
   }
 }
 
-const errors = { signals: null, state: null };
+const errors = { signals: null, state: null, events: null };
 function renderErrors() {
   const banner = $("#errorBanner");
   const messages = Object.values(errors).filter(Boolean);
@@ -390,6 +391,7 @@ function renderPositions(positions) {
     });
 
     row.append(top, state, financial, metrics);
+    row.appendChild(positionLegs(position));
     const range = rangeMark(position);
     if (range) row.appendChild(range);
 
@@ -471,6 +473,82 @@ function renderActivity(items) {
   });
 }
 
+const EVENT_SAFE = new Set(["OPENED", "CLOSED"]);
+const EVENT_DANGER = new Set([
+  "ERROR", "FORBIDDEN", "BAD_SIGNATURE", "IP_FORBIDDEN",
+  "UNAUTHORIZED", "MISCONFIGURED", "RATE_LIMITED",
+]);
+
+function eventTone(status) {
+  if (EVENT_SAFE.has(status)) return "safe";
+  if (EVENT_DANGER.has(status)) return "danger";
+  return "attention";
+}
+
+function renderEvents(events) {
+  const list = $("#eventList");
+  list.replaceChildren();
+  list.setAttribute("aria-busy", "false");
+  $("#statEvents").textContent = String(events.length);
+  if (!events.length) {
+    list.appendChild(emptyState("No alerts received yet", "Incoming TradingView webhook events will appear here."));
+    return;
+  }
+  events.forEach((ev) => {
+    const action = String(ev.action || "").toUpperCase();
+    const actionClass = action === "CLOSE" || action === "SELL" ? "chip-sell" : "chip-buy";
+    const headline = node("div", "event-headline");
+    headline.append(node("strong", "ticker", ev.symbol));
+    if (action) headline.append(node("span", `chip ${actionClass}`, action));
+    const hasLevels = ev.quantity != null || ev.tp != null || ev.sl != null;
+    const levels = hasLevels
+      ? `qty ${ev.quantity == null ? "—" : ev.quantity} · TP ${fmt(ev.tp)} · SL ${fmt(ev.sl)}`
+      : (ev.message || "");
+    const main = node("div", "event-main");
+    main.append(headline, node("span", "event-levels", levels));
+    const item = node("li", "event-item");
+    item.append(
+      node("time", "event-time", ev.time),
+      node("span", "event-source", String(ev.source || "").toUpperCase()),
+      main,
+      node("span", `state-chip state-${eventTone(ev.status)}`, ev.status),
+    );
+    list.appendChild(item);
+  });
+}
+
+function positionLegs(position) {
+  const legs = node("div", "position-legs");
+  const mk = (label, text, tone) => {
+    const leg = node("span", `leg-chip leg-${tone}`);
+    leg.append(node("span", "leg-dot"), node("b", null, label), node("span", null, text));
+    legs.appendChild(leg);
+  };
+  const entryPending = ["ENTRY_PENDING", "ENTRY_CANCEL_PENDING"].includes(position.status);
+  mk("Entry", entryPending ? "pending" : "filled", entryPending ? "warn" : "ok");
+  const [tpText, tpTone] = position.tp_order
+    ? ["resting", "ok"]
+    : position.take_profit != null ? ["soft", "warn"] : ["none", "off"];
+  mk("TP", tpText, tpTone);
+  const [slText, slTone] = position.stop_order
+    ? ["resting", "ok"]
+    : position.stop_loss != null ? ["soft", "warn"] : ["none", "off"];
+  mk("Stop", slText, slTone);
+  return legs;
+}
+
+async function loadEvents() {
+  const requestVersion = ++eventRequestVersion;
+  const { ok, data } = await api("GET", "/api/events");
+  if (requestVersion !== eventRequestVersion) return;
+  if (!ok) {
+    setError("events", data.message || "Could not load events");
+    return;
+  }
+  setError("events", null);
+  renderEvents(data.events || []);
+}
+
 async function loadSignals() {
   const requestVersion = ++signalRequestVersion;
   $("#signalList").setAttribute("aria-busy", "true");
@@ -502,7 +580,7 @@ async function loadState() {
 
 async function refreshAll() {
   setRefreshStatus(true);
-  await Promise.all([loadSignals(), loadState()]);
+  await Promise.all([loadSignals(), loadState(), loadEvents()]);
   setRefreshStatus(false, Object.values(errors).some(Boolean));
 }
 
@@ -544,7 +622,9 @@ refreshAll();
 window.setInterval(() => {
   if (document.visibilityState === "visible") {
     setRefreshStatus(true);
-    loadState().then(() => setRefreshStatus(false, Object.values(errors).some(Boolean)));
+    Promise.all([loadState(), loadEvents()]).then(
+      () => setRefreshStatus(false, Object.values(errors).some(Boolean)),
+    );
   }
 }, 4000);
 window.setInterval(() => {

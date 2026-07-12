@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Event stream + OCO legs — comparison</title>
+<style>
+  :root{
+    --bg:#090c10;--surface:#11161c;--line:#29323c;--line-strong:#394552;--text:#edf1f4;
+    --muted:#a3adb7;--muted-strong:#c2c9d0;--accent:#58d7c0;--up:#5bd18c;--up-soft:#14291e;
+    --down:#ff7481;--warn:#efbd66;--warn-soft:#302718;--danger:#ff8994;--danger-soft:#351b20;
+    --radius:10px;--radius-sm:6px;--radius-pill:999px;--mono:"SFMono-Regular",Consolas,monospace;
+    --font:Inter,ui-sans-serif,system-ui,sans-serif;
+  }
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;padding:24px}
+  h1{font-size:18px;margin:0 0 4px} .sub{color:var(--muted);font-size:12px;margin:0 0 20px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .col h2{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  .panel{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);overflow:hidden;margin-bottom:16px}
+  .panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding:14px 18px}
+  .label{color:var(--accent);font-family:var(--mono);font-size:11px;font-weight:700}
+  .panel-head h3{margin:2px 0 0;font-size:16px}
+  .badge{border:1px solid var(--line-strong);border-radius:var(--radius-pill);padding:4px 9px;color:var(--muted-strong);font-size:11px}
+  .chip{display:inline-flex;align-items:center;border-radius:var(--radius-sm);padding:3px 6px;font-size:10px;font-weight:800}
+  .buy{background:var(--up-soft);color:var(--up)} .sell{background:var(--danger-soft);color:var(--danger)}
+  .ok{background:var(--up-soft);color:var(--up)} .warnp{background:var(--warn-soft);color:var(--warn)} .dangerp{background:var(--danger-soft);color:var(--danger)}
+  .event-item{display:grid;grid-template-columns:64px 46px minmax(0,1fr) auto;gap:12px;align-items:baseline;border-bottom:1px solid var(--line);padding:10px 18px}
+  .event-item:last-child{border-bottom:0}
+  .t{color:var(--muted);font-family:var(--mono);font-size:11px}
+  .src{color:var(--accent);font-family:var(--mono);font-size:10px;font-weight:800}
+  .main{min-width:0} .main strong{font-size:15px} .lv{display:block;color:var(--muted);font-family:var(--mono);font-size:11px;margin-top:2px}
+  .pos{border-bottom:1px solid var(--line);padding:14px 18px}
+  .pos-top{display:flex;justify-content:space-between}
+  .legs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .leg{display:inline-flex;gap:5px;align-items:center;border:1px solid var(--line);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;color:var(--muted-strong)}
+  .leg b{font-weight:700} .leg .dot{width:7px;height:7px;border-radius:50%}
+  .d-ok{background:var(--up)} .d-warn{background:var(--warn)} .d-off{background:var(--line-strong)}
+  .note{color:var(--muted);font-size:12px;margin:6px 2px 0}
+</style>
+</head>
+<body>
+  <h1>Task 8 — Incoming alerts stream + per-position OCO legs</h1>
+  <p class="sub">Conforming to the existing Calm Risk Console tokens. Left = today. Right = event-first addition.</p>
+  <div class="grid">
+    <div class="col">
+      <h2>A · Before (current)</h2>
+      <div class="panel">
+        <div class="panel-head"><div><span class="label">Protection state</span><h3>Active positions</h3></div></div>
+        <div class="pos">
+          <div class="pos-top"><strong>AAPL</strong><span style="color:var(--up);font-family:var(--mono)">+$4.20</span></div>
+          <div style="color:var(--muted);font-family:var(--mono);font-size:12px">4 @ 205.10 · TP 210.00 · SL 190.00</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><span class="label">Audit trail</span><h3>Recent activity</h3></div><span class="badge">Latest 20</span></div>
+        <div class="event-item"><span class="t">14:31:02</span><span class="src">TRADE</span><span class="main">AAPL · opened 4 @ 205.10</span><span></span></div>
+      </div>
+      <p class="note">Signals are internal-only; nothing shows the inbound TradingView events or which broker legs are actually resting.</p>
+    </div>
+
+    <div class="col">
+      <h2>B · After (event-first) — chosen</h2>
+      <div class="panel">
+        <div class="panel-head"><div><span class="label">Event-driven signals</span><h3>Incoming alerts</h3></div><span class="badge"><strong>3</strong> recent</span></div>
+        <div class="event-item"><span class="t">14:31:02</span><span class="src">HOOK</span><span class="main"><strong>AAPL</strong> <span class="chip buy">OPEN</span><span class="lv">qty 4 · TP 210.00 · SL 190.00</span></span><span class="chip ok">OPENED</span></div>
+        <div class="event-item"><span class="t">14:30:40</span><span class="src">HOOK</span><span class="main"><strong>NVDA</strong> <span class="chip sell">CLOSE</span><span class="lv">market exit</span></span><span class="chip ok">CLOSED</span></div>
+        <div class="event-item"><span class="t">14:29:58</span><span class="src">HOOK</span><span class="main"><strong>TSLA</strong> <span class="chip buy">OPEN</span><span class="lv">rejected — outside watchlist</span></span><span class="chip dangerp">FORBIDDEN</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><span class="label">Protection state</span><h3>Active positions</h3></div></div>
+        <div class="pos">
+          <div class="pos-top"><strong>AAPL</strong><span style="color:var(--up);font-family:var(--mono)">+$4.20</span></div>
+          <div style="color:var(--muted);font-family:var(--mono);font-size:12px">4 @ 205.10 · TP 210.00 · SL 190.00</div>
+          <div class="legs">
+            <span class="leg"><span class="dot d-ok"></span><b>Entry</b> filled</span>
+            <span class="leg"><span class="dot d-ok"></span><b>TP</b> resting</span>
+            <span class="leg"><span class="dot d-ok"></span><b>Stop</b> resting</span>
+          </div>
+        </div>
+        <div class="pos">
+          <div class="pos-top"><strong>MSFT</strong><span style="color:var(--warn);font-family:var(--mono)">pending</span></div>
+          <div style="color:var(--muted);font-family:var(--mono);font-size:12px">2 · basis pending</div>
+          <div class="legs">
+            <span class="leg"><span class="dot d-warn"></span><b>Entry</b> pending</span>
+            <span class="leg"><span class="dot d-off"></span><b>TP</b> none</span>
+            <span class="leg"><span class="dot d-warn"></span><b>Stop</b> soft</span>
+          </div>
+        </div>
+      </div>
+      <p class="note">The inbound event is the signal (honored tp/sl/qty + accept/reject). Legs expose whether the 3 orders (entry / limit-TP / stop) actually rest at the broker vs soft-monitored.</p>
+    </div>
+  </div>
+</body>
+</html>
