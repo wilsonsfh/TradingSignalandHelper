@@ -7,7 +7,7 @@ Short "pick up where we left off" note. Full detail: `docs/SETUP.md`,
 - **Everything is merged into `main`.** A plain `git clone` lands on the current event-driven
   version — no branch checkout needed. Working tree is clean. Both feature branches
   (`feature/event-driven-tradingview-bridge` and the older `feature/credential-free-completion`)
-  are fully incorporated in `main` and are now redundant (safe to delete when you like).
+  are fully incorporated in `main` and have now been deleted (local + remote) — only `main` remains.
 - **232 tests green.** `moomoo-api==10.08.6808` installed in `.venv`. The Cloudflare notifier
   Worker is named `signal-notifier` (matches the deployed Worker).
 - `.env` is already set for **moomoo SG paper**: `BROKER=moomoo`, `TRD_ENV=SIMULATE`,

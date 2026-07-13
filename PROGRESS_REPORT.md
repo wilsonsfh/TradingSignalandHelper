@@ -10,11 +10,21 @@
 | Calm Risk Console | Complete | Responsive browser and accessibility/state acceptance passed. |
 | First-run guidance | Complete | Paper-only dismiss/reload/replay flow verified. |
 | Event-driven bridge | Complete offline | Webhook honors alert tp/sl/qty; manual-OCO stop order; event log + Incoming-alerts UI; HMAC/IP/rate-limit hardening. |
-| GitHub publication | Complete | Default `main` and motivation-first README pushed. |
+| GitHub publication | Complete | Default `main` and motivation-first README pushed; feature branches deleted — only `main` remains. |
 | OpenD paper account | Pending owner gate | Step 1 runbook in `docs/HANDOVER-live-trading.md`; run one small `TRD_ENV=SIMULATE` lifecycle. |
 | REAL money | Gate built (OFF); pre-capital follow-ups pending | Double opt-in + circuit breakers + market-hours in `trader/safety.py`/`web/app.py` (226 tests). Before capital: startup reconciliation, dry-run replay, human sign-off (`docs/superpowers/specs/2026-07-12-real-mode-enablement.md`). |
 
 ## Completed
+
+- **2026-07-13 — Deleted redundant feature branches; only `main` remains.** Verified both
+  feature branches were fully merged (`git branch -r --merged main` listed
+  `origin/feature/credential-free-completion`; `git log origin/feature/credential-free-completion
+  --not main` was empty — zero commits missing from `main`). `feature/event-driven-tradingview-bridge`
+  was already gone (local + remote); deleted the last remaining remote branch
+  `origin/feature/credential-free-completion` via `git push origin --delete`, then `git fetch --prune`.
+  `git branch -a` now shows only `main` / `origin/main`. Updated `docs/NEXT.md` to state the branches
+  are deleted rather than "safe to delete." No code change; all commits preserved in `main` (232 tests
+  still green).
 
 - **2026-07-12 — All branches confirmed merged into `main`; handover refreshed.** `origin/main`
   is at the event-driven tip — both `feature/event-driven-tradingview-bridge` and the older
