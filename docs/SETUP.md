@@ -30,7 +30,7 @@ Nothing here is committed as a secret. The app never stores your moomoo password
 
 ```bash
 cd /Users/wsoon/Projects/TradingSignalandHelper
-.venv/bin/python -m pytest -q          # sanity: should say "234 passed"
+.venv/bin/python -m pytest -q          # sanity: should say "232 passed"
 .venv/bin/pip install -r requirements-moomoo.txt   # moomoo-api==10.8.6808 (already installed this session)
 ```
 ✅ Done when `pytest` is green and `.venv/bin/pip show moomoo-api` prints version 10.08.6808.
@@ -162,7 +162,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-moomoo.txt                 # app deps + moomoo SDK (pulls requirements.txt)
 cp .env.example .env                                   # set BROKER=moomoo, TRD_ENV=SIMULATE,
                                                        # DATA_SOURCE=yfinance, MOOMOO_SECURITY_FIRM=FUTUSG
-pytest -q                                              # expect 234 passed
+pytest -q                                              # expect 232 passed
 ```
 Then follow **Phase A** (run OpenD, then `python scripts/check_opend.py`). `.env` is
 git-ignored, so your credentials/secrets never leave that machine; SQLite state is created

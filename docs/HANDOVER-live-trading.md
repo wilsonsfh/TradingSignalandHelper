@@ -24,7 +24,7 @@ account IDs — those live in your local `.env`, `wrangler.jsonc`, and Cloudflar
 - Branch: `feature/event-driven-tradingview-bridge` (pushed to `origin` = `wilsonsfh/TradingSignalandHelper`; `main` untouched, no PR yet).
 - Verify anytime (no bare `python` on this Mac — use the venv):
   ```bash
-  .venv/bin/python -m pytest          # expect: 194 passed
+  .venv/bin/python -m pytest          # expect: 232 passed
   .venv/bin/python -m compileall -q broker data signals state strategy trader web notify config.py
   node --check web/static/app.js
   ```

@@ -5,7 +5,7 @@ Short "pick up where we left off" note. Full detail: `docs/SETUP.md`,
 
 ## State right now
 - Branch `feature/event-driven-tradingview-bridge` (pushed; `main` untouched). Latest commit `14ddc3a`.
-- **234 tests green.** `moomoo-api==10.08.6808` installed in `.venv`.
+- **232 tests green.** `moomoo-api==10.08.6808` installed in `.venv`.
 - `.env` is already set for **moomoo SG paper**: `BROKER=moomoo`, `TRD_ENV=SIMULATE`,
   `DATA_SOURCE=yfinance`, `MOOMOO_SECURITY_FIRM=FUTUSG`, OpenD `127.0.0.1:11111`,
   `WEBHOOK_ENABLED=false`. Config validates.
