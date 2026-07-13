@@ -16,6 +16,14 @@
 
 ## Completed
 
+- **2026-07-12 — README links the portability guide; `main` fast-forwarded to the bridge.**
+  README now points to the deep guides instead of duplicating them: a Quick-Start callout +
+  a Documentation index linking `docs/SETUP.md` (setup + "run on another machine"), `docs/NEXT.md`,
+  and `docs/HANDOVER-live-trading.md`. Merged the session's work to **`main`** via clean
+  fast-forward (main was 0 ahead / 23 behind), so a plain `git clone` now lands on the current
+  event-driven version — no branch checkout needed. `feature/event-driven-tradingview-bridge`
+  still exists and stays in sync.
+
 - **2026-07-12 — README re-lead (signals + click-collapse) + portability guide.** Reframed
   `README.md` so the main emphasis is the **signal-driven** model and the shift from the old
   ~3-click "review → confirm → watch" flow to **zero-click, API-executed** orders (new

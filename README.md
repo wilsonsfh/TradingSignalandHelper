@@ -122,6 +122,10 @@ Use TradingSignalandHelper if you want to:
 | REAL-money gate | Double opt-in (`ALLOW_REAL_WEBHOOK` + per-alert `confirm`), per-order notional cap, daily-loss kill-switch, and a market-hours fence — all off by default, with an unmistakable "LIVE MONEY ARMED" dashboard. |
 | Notifications | Optional Telegram pushes on open, close, auto-exit (TP/SL/stop), and rejection. |
 
+> **Setting up the moomoo paper broker, or running on another machine?** This Quick Start is
+> the credential-free mock path. For the moomoo + OpenD paper setup and the **"run it on another
+> machine"** portability guide (git clone + venv; no Docker), see **[`docs/SETUP.md`](docs/SETUP.md)**.
+
 ## Quick Start: First Paper Trade
 
 ### 1. Install
@@ -473,6 +477,9 @@ The highest-value next steps are:
 
 ## Documentation
 
+- **Setup & credentials (paper-first) + run on another machine:** [`docs/SETUP.md`](docs/SETUP.md)
+- **Resume / handover note:** [`docs/NEXT.md`](docs/NEXT.md)
+- **Live-trading — Step 1 (paper) & Step 2 (real money):** [`docs/HANDOVER-live-trading.md`](docs/HANDOVER-live-trading.md)
 - Event-driven bridge plan: `docs/superpowers/plans/2026-07-12-event-driven-tradingview-bridge.md`
 - Deployment runbook: `docs/deploy/README.md`
 - REAL-mode enablement conditions: `docs/superpowers/specs/2026-07-12-real-mode-enablement.md`
