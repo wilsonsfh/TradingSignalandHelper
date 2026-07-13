@@ -13,7 +13,7 @@ account IDs — those live in your local `.env`, `wrangler.jsonc`, and Cloudflar
 - **Real money is deliberately blocked** in the webhook (`web/app.py:315`, `if cfg.is_real_money: return 403`).
   That block is the switch Step 2 replaces with an explicit, guarded opt-in.
 - **Layer 1 notifier Worker** (`cloudflare-notifier/`) is being deployed by you to your
-  **personal** Cloudflare account (`trading-signal-notifier`, KV `EVENTS`) → TradingView →
+  **personal** Cloudflare account (`signal-notifier`, KV `EVENTS`) → TradingView →
   Telegram. It does NOT trade.
 - **Layer 2 executor** = the Python bridge + OpenD on a persistent host, fronted by
   `cloudflare-tunnel/`. This is what trades.

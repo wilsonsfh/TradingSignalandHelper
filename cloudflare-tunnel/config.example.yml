@@ -3,7 +3,7 @@
 #
 # This exposes the LOCAL Flask bridge (python cli.py web, 127.0.0.1:5000) at a stable
 # HTTPS hostname on your PERSONAL Cloudflare account, so TradingView (or the
-# trading-signal-notifier Worker) can reach /webhook and you can reach the dashboard behind
+# signal-notifier Worker) can reach /webhook and you can reach the dashboard behind
 # Cloudflare Access. The bridge — with OpenD — keeps running locally; the tunnel is
 # just the front door.
 

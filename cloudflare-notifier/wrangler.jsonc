@@ -4,7 +4,7 @@
   // This Worker does NOT trade. Live moomoo/OpenD execution runs on a persistent host
   // (local Mac, a VM, or a Zo Computer) — Workers cannot run OpenD or a long-lived process.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "trading-signal-notifier",
+  "name": "signal-notifier",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-01",
   "observability": { "enabled": true },
