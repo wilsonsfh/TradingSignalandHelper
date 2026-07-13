@@ -4,14 +4,19 @@ Short "pick up where we left off" note. Full detail: `docs/SETUP.md`,
 `docs/HANDOVER-live-trading.md`, `PROGRESS_REPORT.md`.
 
 ## State right now
-- Branch `feature/event-driven-tradingview-bridge` (pushed; `main` untouched). Latest commit `14ddc3a`.
-- **232 tests green.** `moomoo-api==10.08.6808` installed in `.venv`.
+- **Everything is merged into `main`.** A plain `git clone` lands on the current event-driven
+  version — no branch checkout needed. Working tree is clean. Both feature branches
+  (`feature/event-driven-tradingview-bridge` and the older `feature/credential-free-completion`)
+  are fully incorporated in `main` and are now redundant (safe to delete when you like).
+- **232 tests green.** `moomoo-api==10.08.6808` installed in `.venv`. The Cloudflare notifier
+  Worker is named `signal-notifier` (matches the deployed Worker).
 - `.env` is already set for **moomoo SG paper**: `BROKER=moomoo`, `TRD_ENV=SIMULATE`,
   `DATA_SOURCE=yfinance`, `MOOMOO_SECURITY_FIRM=FUTUSG`, OpenD `127.0.0.1:11111`,
-  `WEBHOOK_ENABLED=false`. Config validates.
+  `WEBHOOK_ENABLED=false`. Config validates. (`.env` is git-ignored — recreate it on a new machine.)
 - Built & shipped: event-driven webhook bridge, manual-OCO moomoo adapter, REAL-money gate
   (off by default), obvious REAL "LIVE MONEY ARMED" UI + Apple motion, configurable brokerage
-  entity, `scripts/check_opend.py` probe, full setup guide.
+  entity, `scripts/check_opend.py` probe, full setup + portability guide.
+- **The only blocker is Phase A below (moomoo account + OpenD) — owner-side. There are no code blockers.**
 
 ## ◀ IMMEDIATE NEXT ACTION (owner — Phase A, needs your login)
 1. **moomoo SG app:** finish US account opening + open **Paper Trading** (fake buying power). No funding needed.

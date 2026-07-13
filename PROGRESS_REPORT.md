@@ -16,6 +16,13 @@
 
 ## Completed
 
+- **2026-07-12 — All branches confirmed merged into `main`; handover refreshed.** `origin/main`
+  is at the event-driven tip — both `feature/event-driven-tradingview-bridge` and the older
+  `feature/credential-free-completion` (a stale ancestor) are fully incorporated, so a plain
+  `git clone` lands on the current version (no branch checkout). Working tree clean; 232 tests.
+  Refreshed `docs/NEXT.md` to state the merged reality and that the only remaining blocker is
+  owner-side Phase A (moomoo account + OpenD). Both feature branches are now redundant/deletable.
+
 - **2026-07-12 — README links the portability guide; `main` fast-forwarded to the bridge.**
   README now points to the deep guides instead of duplicating them: a Quick-Start callout +
   a Documentation index linking `docs/SETUP.md` (setup + "run on another machine"), `docs/NEXT.md`,
