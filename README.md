@@ -1,11 +1,13 @@
 # TradingSignalandHelper
 
-**A local, paper-first US-stock signal desk that helps you learn, review, and execute trades without jumping straight to real money.**
+**A signal-driven US-stock trading desk: your TradingView signal fires the trade — collapsing the old 3-click "review → confirm → watch" routine into zero-click, API-executed orders, paper-first and fully inspectable.**
 
-TradingSignalandHelper is a **TradingView → moomoo auto-trading bridge** in the spirit
-of Curteis Yang's design: **the Pine script is the brain, the bridge stays dumb.** A
-TradingView alert fires on a chart *event*, and the app executes it — while making every
-step of the order lifecycle inspectable.
+TradingSignalandHelper is a **TradingView → moomoo bridge** built on Curteis Yang's
+principle: **the Pine script is the brain; the bridge just executes.** Your chart
+*signal* is the trigger — a TradingView alert fires a webhook and the app places the
+entry, take-profit, and stop **automatically**, so you stop hand-placing every trade. A
+human-in-the-loop dashboard stays on for oversight and one-tap real-money confirmation,
+and every step of the order lifecycle is inspectable.
 
 It bundles, in one Python application:
 
@@ -24,7 +26,31 @@ credentials, or network connection for its complete mock workflow.
 
 > [!WARNING]
 > This is educational software, not financial advice or a profitable-strategy claim.
-> Keep `BROKER=mock` or `TRD_ENV=SIMULATE`. Live-money behavior is not validated.
+> Real-money execution is **gated off by default** and **not yet validated for live
+> capital** — keep `BROKER=mock` or `TRD_ENV=SIMULATE` while learning.
+
+## Signals first — from 3 clicks to zero
+
+The signal is the product; everything else exists to execute it safely.
+
+- **Before — the manual helper (still here for oversight):** a signal appears, you click
+  **Review**, click **Confirm** on the order ticket, then watch protection. ~3 clicks per
+  trade, and you have to be at the screen.
+- **Now — the signal-driven bridge (the API integration):** your TradingView Pine alert
+  fires on the chart event → `POST /webhook` → the app executes entry + take-profit + stop
+  (a manual OCO) **automatically**. **Zero clicks per trade — the signal *is* the trigger.**
+  The dashboard becomes a live oversight surface (incoming alerts, protection legs, P&L,
+  audit trail), not the execution path.
+
+| | Manual helper | Signal-driven bridge |
+|---|---|---|
+| Trigger | You, watching charts | Your TradingView signal |
+| Clicks per trade | ~3 (Review → Confirm → watch) | 0 |
+| Where you are | At the dashboard | Anywhere |
+| Safety | Confirm ticket | Shared secret + replay/stale guards; REAL adds `confirm: true` + circuit breakers |
+
+Broker confirmation always wins over optimistic UI, protection legs are tracked, and real
+money stays gated off by default.
 
 ## Motivation
 
@@ -88,11 +114,13 @@ Use TradingSignalandHelper if you want to:
 | Background monitor | Checks soft TP/SL independently of dashboard polling. |
 | Broker-safe states | Tracks pending, partial, unprotected, and unknown-order conditions. |
 | Duplicate protection | Serializes local mutations and claims symbols before submission. |
-| Event-driven webhook | Executes TradingView alerts, honoring alert `quantity`/`tp`/`sl`; rejects weak secrets, stale/replayed events, unknown symbols, over-cap sizes, and REAL mode. |
+| Event-driven webhook | Executes TradingView alerts, honoring alert `quantity`/`tp`/`sl`; rejects weak secrets, stale/replayed events, unknown symbols, and over-cap sizes; REAL mode is gated off by default. |
 | Manual OCO | Optional resting broker stop order paired with the limit take-profit; a fill on one leg cancels the other. |
 | Incoming-alerts stream | The dashboard shows every inbound event (accepted or rejected) and each position's Entry/TP/Stop legs. |
 | Defence-in-depth | Optional HMAC signature, source-IP allow-list, and per-IP rate limit on `/webhook`. |
-| Moomoo adapter | Contract-tested against the real `moomoo-api` `10.8.6808` package shape. |
+| Moomoo adapter | Contract-tested against the real `moomoo-api` `10.8.6808` shape; brokerage entity is configurable (`MOOMOO_SECURITY_FIRM`: FUTU HK / moomoo US / SG / AU / …). |
+| REAL-money gate | Double opt-in (`ALLOW_REAL_WEBHOOK` + per-alert `confirm`), per-order notional cap, daily-loss kill-switch, and a market-hours fence — all off by default, with an unmistakable "LIVE MONEY ARMED" dashboard. |
+| Notifications | Optional Telegram pushes on open, close, auto-exit (TP/SL/stop), and rejection. |
 
 ## Quick Start: First Paper Trade
 

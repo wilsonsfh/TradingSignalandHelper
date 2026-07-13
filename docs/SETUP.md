@@ -146,6 +146,34 @@ corporate `wrangler login`. See `cloudflare-notifier/README.md`.
 
 ---
 
+## Run it on another machine (portability)
+
+**You do NOT need Docker.** OpenD is a host-native desktop gateway that holds your moomoo
+login and listens on `127.0.0.1:11111`; containerizing the app only adds host↔container
+networking and a security footgun for a single-user local tool. A plain clone + venv is
+simpler and is the supported path.
+
+On the new machine (where you can safely enter your moomoo credentials):
+```bash
+git clone https://github.com/wilsonsfh/TradingSignalandHelper.git
+cd TradingSignalandHelper
+git checkout feature/event-driven-tradingview-bridge   # ← all current work is here, not main
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-moomoo.txt                 # app deps + moomoo SDK (pulls requirements.txt)
+cp .env.example .env                                   # set BROKER=moomoo, TRD_ENV=SIMULATE,
+                                                       # DATA_SOURCE=yfinance, MOOMOO_SECURITY_FIRM=FUTUSG
+pytest -q                                              # expect 234 passed
+```
+Then follow **Phase A** (run OpenD, then `python scripts/check_opend.py`). `.env` is
+git-ignored, so your credentials/secrets never leave that machine; SQLite state is created
+locally on first run, so nothing else needs porting.
+
+> ⚠️ **Branch gotcha:** `main` is intentionally still the pre-bridge code, so a plain
+> `git clone` lands on old code — you must `git checkout feature/event-driven-tradingview-bridge`
+> (or merge it to `main` first). The repo is public, so the clone needs no auth.
+
+---
+
 ## Later — switching to REAL money (do not rush)
 
 Only after Phase A + B are solid on paper, and after the two remaining code follow-ups

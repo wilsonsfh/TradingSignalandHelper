@@ -16,6 +16,15 @@
 
 ## Completed
 
+- **2026-07-12 — README re-lead (signals + click-collapse) + portability guide.** Reframed
+  `README.md` so the main emphasis is the **signal-driven** model and the shift from the old
+  ~3-click "review → confirm → watch" flow to **zero-click, API-executed** orders (new
+  "Signals first — from 3 clicks to zero" section + before/after table), plus capability rows
+  for the REAL-money gate, notifications, and configurable brokerage entity; fixed stale
+  "REAL blocked" wording. Added a **"Run it on another machine"** section to `docs/SETUP.md`:
+  git-clone + venv path (no Docker — OpenD is a host-native gateway; containerizing it is a
+  networking/security footgun), with the branch-checkout gotcha (`main` is still pre-bridge).
+
 - **2026-07-12 — moomoo entity is configurable + OpenD connectivity probe.** Discovered
   during setup that `MoomooBroker.connect()` never passed `security_firm`, so the SDK
   defaulted to FUTU HK — a **moomoo SG** (or US/AU/…) account would list zero accounts and
