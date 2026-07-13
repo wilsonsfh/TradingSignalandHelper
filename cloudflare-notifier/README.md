@@ -1,4 +1,4 @@
-# signal-notifier — TradingView → Telegram (Cloudflare Worker)
+# trading-signal-notifier — TradingView → Telegram (Cloudflare Worker)
 
 The always-on **edge front** for TradingSignalandHelper. TradingView fires a chart-event
 alert → this Worker authenticates it, records it (KV), shows it on a small dashboard, and
@@ -33,7 +33,7 @@ Worker) also POST to the local bridge via a Cloudflare Tunnel.
 ## Auth model (same account as danes-musings)
 
 - **`wrangler login`** in a browser authenticates the wilsonsfh Cloudflare account. The
-  Worker lands at `https://signal-notifier.<subdomain>.workers.dev`.
+  Worker lands at `https://trading-signal-notifier.<subdomain>.workers.dev`.
 - **`/webhook`** is the machine path: authenticated by a ≥32-char shared `key` in the body
   (constant-time checked), plus an optional HMAC `X-Signature` and optional TradingView
   IP allow-list. Keep interactive Access **off** this path so TradingView can reach it.
@@ -91,7 +91,7 @@ for the human dashboard).
 
 ## TradingView alert (the signal source)
 
-Create an alert whose **Webhook URL** is `https://signal-notifier.<subdomain>.workers.dev/webhook`
+Create an alert whose **Webhook URL** is `https://trading-signal-notifier.<subdomain>.workers.dev/webhook`
 and whose message is JSON (Pine can build this):
 
 ```json

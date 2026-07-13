@@ -1,5 +1,5 @@
 /**
- * signal-notifier — TradingView webhook -> Telegram, on Cloudflare Workers.
+ * trading-signal-notifier — TradingView webhook -> Telegram, on Cloudflare Workers.
  *
  * The always-on edge front for TradingSignalandHelper: TradingView fires a chart-event
  * alert at POST /webhook; this Worker authenticates it, records it (KV), and pushes a

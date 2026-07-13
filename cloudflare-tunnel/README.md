@@ -3,7 +3,7 @@
 Layer 2 is the part that actually **trades** (Flask bridge + OpenD → moomoo). It cannot
 be a Worker (OpenD is a persistent local gateway). This exposes the local bridge at a
 stable HTTPS hostname on your **personal** Cloudflare account, protected by Access — so
-TradingView (or the `signal-notifier` Worker) can reach `/webhook`, and only you can
+TradingView (or the `trading-signal-notifier` Worker) can reach `/webhook`, and only you can
 open the dashboard.
 
 ## Why a tunnel (vs opening a port)

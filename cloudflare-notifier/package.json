@@ -1,5 +1,5 @@
 {
-  "name": "signal-notifier",
+  "name": "trading-signal-notifier",
   "version": "0.1.0",
   "private": true,
   "description": "TradingView -> Telegram signal notifier on Cloudflare Workers (front for TradingSignalandHelper).",
