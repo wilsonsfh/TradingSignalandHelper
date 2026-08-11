@@ -2,6 +2,15 @@
 
 **A signal-driven US-stock trading desk: your TradingView signal fires the trade — collapsing the old 3-click "review → confirm → watch" routine into zero-click, API-executed orders, paper-first and fully inspectable.**
 
+## Status
+
+**Last reviewed: 2026-08-11 — Working — needs improvement**
+
+- Complete offline: mock trading workflow, broker/order safety, event-driven webhook bridge, Calm Risk Console, and moomoo SDK contract all verified per PROGRESS_REPORT.
+- REAL-money execution gate is built but OFF by default and not validated for live capital; pre-capital follow-ups (startup reconciliation, dry-run replay, human sign-off) pending.
+- Blocked on owner gate: run one small `TRD_ENV=SIMULATE` OpenD paper lifecycle. Docs report 232 tests (not re-run this sweep).
+- Latest commit `0b28ed1`; branch `main` in sync with origin/main. Working tree clean.
+
 TradingSignalandHelper is a **TradingView → moomoo bridge** built on Curteis Yang's
 principle: **the Pine script is the brain; the bridge just executes.** Your chart
 *signal* is the trigger — a TradingView alert fires a webhook and the app places the
